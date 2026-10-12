@@ -5,8 +5,9 @@ import "katex/dist/katex.min.css";
 import "./styles.css";
 
 import { FindBar } from "./find";
-import { BLOCK_CHOICES, BLOCK_LABEL, type FormatKind } from "./format";
+import { BLOCK_LABEL, type FormatKind } from "./format";
 import { Outline } from "./outline";
+import { openBlockPicker, type Picker } from "./picker";
 import { isExternalHref, isMarkdownHref, resolveRelative } from "./render";
 import * as shell from "./shell";
 import { Tabs, type Mode, type Tab } from "./tabs";
@@ -169,10 +170,10 @@ function boot(): void {
   const eolItem = el("span", "status__item");
   status.append(outlineButton, modeButton, blockButton, pathItem, el("span", "status__spacer"), wordsItem, eolItem, createThemeButton(theme));
 
-  let popup: HTMLElement | null = null;
+  let picker: Picker | null = null;
   const closePopup = () => {
-    popup?.remove();
-    popup = null;
+    picker?.close();
+    picker = null;
   };
 
   const refreshOutline = (tab: Tab | null) => {
@@ -252,34 +253,18 @@ function boot(): void {
   modeButton.addEventListener("click", () => tabs.cycleMode());
 
   blockButton.addEventListener("click", () => {
-    if (popup) {
+    if (picker && picker.element.isConnected) {
       closePopup();
       return;
     }
     const tab = tabs.current;
     if (!tab) return;
-    const current = tabs.blockTypeOf(tab);
-    popup = el("div", "popup");
-    popup.setAttribute("role", "menu");
-    for (const [kind, label, key] of BLOCK_CHOICES) {
-      const item = el("button", "popup__item");
-      item.type = "button";
-      item.setAttribute("role", "menuitem");
-      const isCurrent = current === kind || (kind === "bullet" && current === "list");
-      if (isCurrent) item.classList.add("popup__item--current");
-      item.append(document.createTextNode(label), Object.assign(el("kbd", ""), { textContent: key }));
-      item.addEventListener("click", () => {
-        closePopup();
-        tabs.format(kind);
-        refreshCursorState();
-      });
-      popup.appendChild(item);
-    }
-    document.body.appendChild(popup);
-    popup.querySelector<HTMLButtonElement>("button")?.focus();
-  });
-  document.addEventListener("mousedown", (event) => {
-    if (popup && !popup.contains(event.target as Node) && event.target !== blockButton) closePopup();
+    picker = openBlockPicker(blockButton, tabs.blockTypeOf(tab), (kind) => {
+      picker = null;
+      tabs.format(kind);
+      refreshCursorState();
+      scheduleOutline();
+    });
   });
 
   document.body.append(find.element);
