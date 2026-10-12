@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur Labs. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Gailleur Labs
 
 // The only module that talks to the native shell. Everything else is plain
 // DOM code so it can run under jsdom in tests.

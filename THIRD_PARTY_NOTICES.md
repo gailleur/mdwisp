@@ -13,9 +13,11 @@ own license, reproduced in the package's distribution and listed here.
 | CodeMirror 6 and Lezer | MIT | Source editor |
 | KaTeX | MIT | Math rendering (fonts bundled) |
 | Mermaid | MIT | Diagram rendering |
+| elkjs (via Mermaid) | EPL-2.0 | ELK diagram layout; shipped as a separate, lazily loaded chunk and unmodified |
 | Vite, TypeScript, Vitest, jsdom | MIT | Build and test tooling (not shipped) |
 
 Transitive Rust dependencies are enumerated by `cargo metadata`; transitive
-npm dependencies by `pnpm licenses list`. All are under permissive licenses
-(MIT, Apache-2.0, BSD, ISC, MPL-2.0, Unicode, Zlib). No copyleft component is
-bundled.
+npm dependencies by `pnpm licenses list`. Apart from elkjs (EPL-2.0, a
+file-level copyleft that applies only to that module), all are under
+permissive licenses (MIT, Apache-2.0, BSD, ISC, MPL-2.0, Unicode, Zlib,
+Unlicense). No GPL-family component is bundled.

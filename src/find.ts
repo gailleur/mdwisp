@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur Labs. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Gailleur Labs
 
 // In-document search. Where the CSS Custom Highlight API exists, matches are
 // painted without touching the DOM, which is what makes searching inside a

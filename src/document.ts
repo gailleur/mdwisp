@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur Labs. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Gailleur Labs
 
 // Pure helpers for the document model. Kept free of DOM so they are trivially
 // unit-tested.

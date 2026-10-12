@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur Labs. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Gailleur Labs
 
 // Integration test of the tab state machine against a fake shell.
 

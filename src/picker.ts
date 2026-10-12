@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur Labs. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Gailleur Labs
 
 // The status-bar block-type picker: a small popup menu listing block kinds.
 

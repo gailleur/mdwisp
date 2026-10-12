@@ -26,7 +26,16 @@ pnpm test               # frontend unit tests
 pnpm tauri build        # produce a platform installer in src-tauri/target
 ```
 
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as
+described in [SECURITY.md](SECURITY.md).
+
 ## License
 
-Proprietary — see [LICENSE](LICENSE). Bundled third-party components are
+Copyright 2026 Gailleur Labs. Licensed under the
+[Apache License, Version 2.0](LICENSE). Bundled third-party components are
 listed with their licenses in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+"mdwisp" and the wisp mark identify this project; the license does not
+grant permission to use them for forks or derived products (section 6).
