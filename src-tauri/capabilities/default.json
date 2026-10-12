@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Least-privilege capability set for the main window. No HTTP, no shell, no unscoped filesystem access. Document directories are granted at runtime by the open_document command.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-title",
+    "core:window:allow-set-focus",
+    "dialog:allow-open",
+    "opener:default",
+    "fs:allow-watch",
+    "fs:allow-unwatch",
+    "window-state:default"
+  ]
+}

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>mdwisp</title>
+  </head>
+  <body>
+    <header class="tabs" id="tabs" role="tablist" aria-label="Open documents"></header>
+    <main class="viewer" id="viewer">
+      <section class="empty" id="empty">
+        <p class="empty__mark" aria-hidden="true">~</p>
+        <p>Open a Markdown file to begin.</p>
+        <button class="empty__open" id="empty-open" type="button">Open…</button>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
