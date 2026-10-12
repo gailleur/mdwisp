@@ -26,6 +26,22 @@ pnpm test               # frontend unit tests
 pnpm tauri build        # produce a platform installer in src-tauri/target
 ```
 
+## Installing
+
+Installers for each release are attached to the GitHub release with a
+`SHA256SUMS` file; check a download with `sha256sum -c SHA256SUMS`.
+
+The builds are not yet code-signed, so each platform warns on first launch:
+
+- **macOS**: right-click the app and choose *Open* once, or run
+  `xattr -d com.apple.quarantine /Applications/mdwisp.app`.
+- **Windows**: in the SmartScreen dialog choose *More info* → *Run anyway*.
+  The installer fetches Microsoft's WebView2 runtime only if the machine
+  lacks it (every supported Windows 10/11 ships with it). That is the one
+  network action in the whole project, and it is the installer's, not the
+  app's.
+- **Linux**: `chmod +x` the AppImage, or install the `.deb`.
+
 ## Contributing and security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as
