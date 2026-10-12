@@ -33,7 +33,8 @@ export function helpSections(isMac: boolean): HelpSection[] {
         k("⌘S", "save"),
         k("⌘⇧S", "save as…"),
         k("⌘R", "reload from disk"),
-        k("⌘P", "print, or save as PDF from the print dialog"),
+        k("⌘P", "print"),
+        k("⌘⇧E", "export PDF of the reading view, no dialog"),
         k("⌘W", "close tab"),
       ],
       notes: [

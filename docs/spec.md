@@ -69,8 +69,11 @@ does, not how any other product does it. All implementation is original.
 - Headings carry stable ids (GitHub-style slugs) so `#anchor` links work.
 - Links to `http(s)` open in the system browser. `mailto:` and similar open
   their system handler. Links to other Markdown files open in a new tab.
-- Print via the system print dialog. PDF export is "Save as PDF" from that
-  dialog on every platform (phase 4 may add a direct exporter).
+- Print via the system print dialog.
+- Export PDF (Cmd/Ctrl+Shift+E) writes the reading view straight to a file
+  through the platform webview's own print-to-file path (AppKit, WebView2,
+  WebKitGTK), with the same print stylesheet as Print. No dialog beyond the
+  save panel, no third-party PDF library.
 - Reload on demand (Cmd/Ctrl+R) in addition to live reload.
 
 - Help: a native **Help** menu (Cmd/Ctrl+/) opens an in-app, offline panel

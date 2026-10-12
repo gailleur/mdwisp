@@ -6,7 +6,7 @@
 ┌───────────────────────────────────────────────┐
 │ Native shell (Rust, Tauri 2)                  │
 │  menu · OS open-file events · open_document   │
-│  print · window state                         │
+│  print · PDF export · window state            │
 ├───────────────────────────────────────────────┤
 │ System webview (WebKit / WebView2 / WebKitGTK)│
 │  TypeScript, no framework                     │
@@ -36,6 +36,24 @@ that it is portable and unit-testable with jsdom.
 The Content Security Policy in `tauri.conf.json` backs all of this up at the
 browser level: no `connect-src` except Tauri IPC, no frames, no workers, no
 forms, scripts only from the bundle.
+
+## PDF export
+
+`src-tauri/src/pdf.rs` is the one place the shell touches the platform
+webview directly. Each system webview can print to a file without a
+dialog: AppKit's `NSPrintOperation` with a save-job disposition, WebView2's
+`PrintToPdf`, and WebKitGTK's `WebKitPrintOperation` with the GTK file
+printer. The bindings used are the crates Tauri already links, so the
+dependency tree does not grow. Results come back over a channel because
+WebView2 and WebKitGTK complete asynchronously on the main thread.
+
+## Release
+
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`: it checks the
+tag against the three version fields, builds installers on macOS, Linux and
+Windows, writes `SHA256SUMS`, and opens a *draft* GitHub release holding all
+of them. Publishing the draft is manual. Builds are unsigned until signing
+credentials are configured; the README explains how to open them.
 
 ## Frontend modules
 

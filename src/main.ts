@@ -324,6 +324,21 @@ function boot(): void {
     scheduleOutline();
   };
 
+  // PDF export always renders the reading view: that is "the document", not
+  // whichever editor happens to be mounted.
+  const exportPdf = async () => {
+    const tab = tabs.current;
+    if (!tab) return;
+    if (tab.mode !== "view") await tabs.setMode("view");
+    const name = `${tab.name.replace(/\.[^.]+$/, "") || "document"}.pdf`;
+    try {
+      const path = await shell.exportPdf(name);
+      if (path) toast(`pdf: ${displayPath(path)}`);
+    } catch (error) {
+      reportError(`PDF export failed: ${String(error)}`);
+    }
+  };
+
   const actions: Record<string, () => void> = {
     new: () => void tabs.newDocument(),
     open: () => void openPicker(),
@@ -336,6 +351,7 @@ function boot(): void {
     },
     reload: () => tabs.reloadActive(),
     print: () => void shell.printPage(),
+    "export-pdf": () => void exportPdf(),
     "close-tab": () => tabs.closeActive(),
     find: () => findAction(0),
     "find-next": () => findAction(1),
@@ -452,6 +468,7 @@ function boot(): void {
       key === "-" ? "zoom-out" :
       key === "0" ? "zoom-reset" :
       key === "/" ? "help" :
+      key === "e" && event.shiftKey ? "export-pdf" :
       null;
     if (!id) return;
     event.preventDefault();

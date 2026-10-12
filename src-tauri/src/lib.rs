@@ -9,6 +9,8 @@
 //! granting read access only to each document's directory, and it opens the
 //! system print dialog. It never touches the network.
 
+mod pdf;
+
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -176,6 +178,22 @@ fn print_page<R: Runtime>(window: tauri::WebviewWindow<R>) -> Result<bool, Strin
     }
 }
 
+/// Writes the current page as a PDF at `path` using the platform webview's
+/// own print-to-file path. Only `.pdf` targets are accepted.
+#[tauri::command]
+async fn export_pdf<R: Runtime>(window: tauri::WebviewWindow<R>, path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    let is_pdf = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("pdf"))
+        .unwrap_or(false);
+    if !is_pdf {
+        return Err("Only .pdf files can be written.".into());
+    }
+    pdf::export(window, path).await
+}
+
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let new_doc = MenuItemBuilder::with_id("new", "New")
         .accelerator("CmdOrCtrl+N")
@@ -196,6 +214,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let print = MenuItemBuilder::with_id("print", "Print…")
         .accelerator("CmdOrCtrl+P")
         .build(app)?;
+    let export_pdf = MenuItemBuilder::with_id("export-pdf", "Export PDF…")
+        .accelerator("CmdOrCtrl+Shift+E")
+        .build(app)?;
     let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
@@ -210,6 +231,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&reload)
         .separator()
         .item(&print)
+        .item(&export_pdf)
         .separator()
         .item(&close_tab);
     if !cfg!(target_os = "macos") {
@@ -375,7 +397,8 @@ pub fn run() {
             open_document,
             save_document,
             take_pending_files,
-            print_page
+            print_page,
+            export_pdf
         ])
         .setup(|app| {
             build_menu(app.handle())?;

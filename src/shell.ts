@@ -64,6 +64,17 @@ export async function printPage(): Promise<void> {
   }
 }
 
+/** Asks where to save, then writes the current page as a PDF. Null if cancelled. */
+export async function exportPdf(defaultName: string): Promise<string | null> {
+  const path = await saveDialog({
+    defaultPath: defaultName,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (!path) return null;
+  await invoke("export_pdf", { path });
+  return path;
+}
+
 export function onOpenFiles(callback: (paths: string[]) => void): Promise<UnlistenFn> {
   return listen<string[]>("open-files", (event) => callback(event.payload));
 }
