@@ -73,21 +73,17 @@ export class Theme {
   }
 }
 
+/** A status-bar button showing the theme mode; click cycles it. */
 export function createThemeButton(theme: Theme): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "theme-toggle";
+  button.className = "status__button";
 
   const update = () => {
-    const labels: Record<ThemeMode, [string, string]> = {
-      auto: ["◐", "Theme: auto — click for light"],
-      light: ["☀", "Theme: light — click for dark"],
-      dark: ["☾", "Theme: dark — click for auto"],
-    };
-    const [glyph, label] = labels[theme.current];
-    button.textContent = glyph;
-    button.setAttribute("aria-label", label);
-    button.title = label;
+    const glyph: Record<ThemeMode, string> = { auto: "◐", light: "○", dark: "●" };
+    button.textContent = `${glyph[theme.current]} ${theme.current}`;
+    button.title = `Theme: ${theme.current} (⌘⇧D cycles)`;
+    button.setAttribute("aria-label", `Theme: ${theme.current}; click to change`);
   };
 
   button.addEventListener("click", () => theme.cycle());

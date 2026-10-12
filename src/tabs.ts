@@ -98,6 +98,11 @@ export class Tabs {
     return this.tabs.some((t) => t.dirty);
   }
 
+  /** Current buffer of a tab, from whichever surface is mounted. */
+  textOf(tab: Tab): string {
+    return this.currentText(tab);
+  }
+
   async open(paths: string[]): Promise<void> {
     for (const path of paths) {
       const existing = this.tabs.find((t) => t.path === path);

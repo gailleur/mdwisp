@@ -20,7 +20,9 @@
         "minWidth": 480,
         "minHeight": 320,
         "dragDropEnabled": true,
-        "zoomHotkeysEnabled": false
+        "zoomHotkeysEnabled": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {

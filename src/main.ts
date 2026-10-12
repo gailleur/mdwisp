@@ -13,6 +13,8 @@ import { createThemeButton, Theme } from "./theme";
 const REMOTE_IMAGES_KEY = "mdwisp.remoteImages";
 const AUTOSAVE_KEY = "mdwisp.autosave";
 const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+const MODE_LABEL: Record<Mode, string> = { view: "reading", wysiwyg: "editing", source: "source" };
+const MODE_KEY: Record<Mode, string> = { view: "⌘1", wysiwyg: "⌘2", source: "⌘3" };
 
 function readFlag(key: string, defaultValue: boolean): boolean {
   try {
@@ -64,7 +66,30 @@ async function copyText(text: string): Promise<void> {
   }
 }
 
-const MODE_LABEL: Record<Mode, string> = { view: "reading", wysiwyg: "editing", source: "source" };
+function wordCount(text: string): number {
+  const words = text.trim().match(/\S+/g);
+  return words ? words.length : 0;
+}
+
+/** Shortens a path for the status bar, keeping the file name end intact. */
+function displayPath(path: string, max = 60): string {
+  const short = path.replace(/^\/Users\/[^/]+\//, "~/").replace(/^\/home\/[^/]+\//, "~/").replace(/^[A-Z]:\\Users\\[^\\]+\\/i, "~\\");
+  if (short.length <= max) return short;
+  const sep = short.includes("\\") ? "\\" : "/";
+  const parts = short.split(sep);
+  let out = parts.pop() ?? short;
+  while (parts.length && out.length + parts[parts.length - 1]!.length + 1 <= max - 2) {
+    out = `${parts.pop()}${sep}${out}`;
+  }
+  return `…${sep}${out}`;
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text = ""): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text) node.textContent = text;
+  return node;
+}
 
 function boot(): void {
   const strip = document.getElementById("tabs");
@@ -72,7 +97,10 @@ function boot(): void {
   const empty = document.getElementById("empty");
   const emptyOpen = document.getElementById("empty-open");
   const emptyNew = document.getElementById("empty-new");
-  if (!strip || !viewer || !empty || !emptyOpen || !emptyNew) throw new Error("Shell markup missing.");
+  const status = document.getElementById("status");
+  if (!strip || !viewer || !empty || !emptyOpen || !emptyNew || !status) throw new Error("Shell markup missing.");
+
+  if (/Mac/i.test(navigator.platform)) document.documentElement.classList.add("is-mac");
 
   const theme = new Theme();
   const find = new FindBar(viewer);
@@ -80,19 +108,24 @@ function boot(): void {
   let autosave = readFlag(AUTOSAVE_KEY, false);
   let zoomIndex = ZOOM_STEPS.indexOf(1);
 
-  const modePill = document.createElement("button");
-  modePill.type = "button";
-  modePill.className = "mode";
-  modePill.hidden = true;
-  modePill.title = "Switch mode (⌘1 reading, ⌘2 editor, ⌘3 source)";
+  // Status bar: mode · path · (spacer) · words · eol · theme
+  const modeButton = el("button", "status__button status__button--mode");
+  modeButton.type = "button";
+  const pathItem = el("span", "status__item status__path");
+  const wordsItem = el("span", "status__item");
+  const eolItem = el("span", "status__item");
+  status.append(modeButton, pathItem, el("span", "status__spacer"), wordsItem, eolItem, createThemeButton(theme));
 
   const reflect = (tab: Tab | null) => {
     empty.hidden = tab !== null;
-    strip.hidden = tab === null;
-    modePill.hidden = tab === null;
+    status.hidden = tab === null;
     if (tab) {
-      modePill.textContent = MODE_LABEL[tab.mode];
-      modePill.dataset["mode"] = tab.mode;
+      modeButton.textContent = `${MODE_LABEL[tab.mode]} ${MODE_KEY[tab.mode]}`;
+      modeButton.title = "Click to cycle reading → editor → source";
+      pathItem.textContent = tab.path ? displayPath(tab.path) : "unsaved";
+      pathItem.title = tab.path ?? "";
+      wordsItem.textContent = `${wordCount(tabs.textOf(tab))} words`;
+      eolItem.textContent = tab.baseline.eol === "\r\n" ? "CRLF" : "LF";
       find.setTarget(tab.article, tab.mode === "wysiwyg");
       find.refresh();
     } else {
@@ -119,8 +152,8 @@ function boot(): void {
     onError: reportError,
   });
 
-  modePill.addEventListener("click", () => tabs.cycleMode());
-  document.body.append(find.element, modePill, createThemeButton(theme));
+  modeButton.addEventListener("click", () => tabs.cycleMode());
+  document.body.append(find.element);
   theme.onChange(() => tabs.retheme());
 
   const openPicker = async () => tabs.open(await shell.pickFiles());
@@ -154,7 +187,7 @@ function boot(): void {
     autosave: () => {
       autosave = !autosave;
       writeFlag(AUTOSAVE_KEY, autosave);
-      toast(autosave ? "Autosave: on" : "Autosave: off");
+      toast(autosave ? "autosave: on" : "autosave: off");
     },
     reload: () => tabs.reloadActive(),
     print: () => void shell.printPage(),
@@ -169,7 +202,7 @@ function boot(): void {
     "remote-images": () => {
       allowRemoteImages = !allowRemoteImages;
       writeFlag(REMOTE_IMAGES_KEY, allowRemoteImages);
-      toast(allowRemoteImages ? "Remote images: on" : "Remote images: off");
+      toast(allowRemoteImages ? "remote images: on" : "remote images: off");
       void tabs.rerenderAll();
     },
     "zoom-in": () => setZoom(zoomIndex + 1),

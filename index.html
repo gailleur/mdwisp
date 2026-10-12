@@ -7,17 +7,31 @@
     <title>mdwisp</title>
   </head>
   <body>
-    <header class="tabs" id="tabs" role="tablist" aria-label="Open documents"></header>
+    <header class="bar" id="bar" data-tauri-drag-region>
+      <div class="tabs" id="tabs" role="tablist" aria-label="Open documents"></div>
+    </header>
     <main class="viewer" id="viewer">
       <section class="empty" id="empty">
-        <p class="empty__mark" aria-hidden="true">~</p>
-        <p>Open a Markdown file, or start a new one.</p>
+        <svg class="empty__mark" viewBox="0 0 1024 1024" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="64">
+            <path d="M264 760V336H484V760"/>
+            <path d="M452 336H704V500"/>
+          </g>
+          <rect x="672" y="500" width="64" height="150" fill="currentColor" opacity="0.55"/>
+          <rect x="690" y="690" width="28" height="28" fill="currentColor"/>
+          <rect x="696" y="748" width="16" height="16" fill="currentColor"/>
+          <rect x="700" y="792" width="8" height="8" fill="currentColor"/>
+        </svg>
+        <p class="empty__name">mdwisp</p>
+        <p class="empty__hint">markdown, quietly.</p>
         <div class="empty__actions">
-          <button class="empty__open" id="empty-open" type="button">Open…</button>
-          <button class="empty__open" id="empty-new" type="button">New</button>
+          <button class="empty__action" id="empty-open" type="button">Open<kbd>⌘O</kbd></button>
+          <button class="empty__action" id="empty-new" type="button">New<kbd>⌘N</kbd></button>
         </div>
+        <p class="empty__drop">or drop a .md file here</p>
       </section>
     </main>
+    <footer class="status" id="status" hidden></footer>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

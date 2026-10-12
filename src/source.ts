@@ -5,7 +5,8 @@
 
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags as t } from "@lezer/highlight";
 import { highlightSelectionMatches, openSearchPanel, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorState } from "@codemirror/state";
 import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers } from "@codemirror/view";
@@ -44,6 +45,22 @@ const theme = EditorView.theme({
   ".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: "var(--mark-active)" },
 });
 
+// One accent, greys for everything else — the same rule as the rest of the UI.
+const highlight = HighlightStyle.define([
+  { tag: t.heading, color: "var(--strong)", fontWeight: "600" },
+  { tag: t.processingInstruction, color: "var(--muted)" },
+  { tag: [t.link, t.url], color: "var(--accent)" },
+  { tag: t.emphasis, fontStyle: "italic" },
+  { tag: t.strong, fontWeight: "600", color: "var(--strong)" },
+  { tag: t.strikethrough, textDecoration: "line-through", color: "var(--muted)" },
+  { tag: t.monospace, color: "var(--fg)" },
+  { tag: t.labelName, color: "var(--accent)" },
+  { tag: [t.angleBracket, t.tagName, t.attributeName], color: "var(--muted)" },
+  { tag: t.attributeValue, color: "var(--fg)" },
+  { tag: t.quote, color: "var(--muted)" },
+  { tag: t.contentSeparator, color: "var(--muted)" },
+]);
+
 export function createSource(container: HTMLElement, text: string, options: SourceOptions): SourceEditor {
   const darkness = new Compartment();
   const darkTheme = (dark: boolean) => EditorView.theme({}, { dark });
@@ -59,7 +76,7 @@ export function createSource(container: HTMLElement, text: string, options: Sour
         history(),
         EditorView.lineWrapping,
         markdown({ base: markdownLanguage }),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        syntaxHighlighting(highlight),
         highlightSelectionMatches(),
         keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
         theme,
