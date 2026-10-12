@@ -5,6 +5,8 @@ import "katex/dist/katex.min.css";
 import "./styles.css";
 
 import { FindBar } from "./find";
+import { BLOCK_CHOICES, BLOCK_LABEL, type FormatKind } from "./format";
+import { Outline } from "./outline";
 import { isExternalHref, isMarkdownHref, resolveRelative } from "./render";
 import * as shell from "./shell";
 import { Tabs, type Mode, type Tab } from "./tabs";
@@ -12,6 +14,7 @@ import { createThemeButton, Theme } from "./theme";
 
 const REMOTE_IMAGES_KEY = "mdwisp.remoteImages";
 const AUTOSAVE_KEY = "mdwisp.autosave";
+const OUTLINE_KEY = "mdwisp.outline";
 const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 const MODE_LABEL: Record<Mode, string> = { view: "reading", wysiwyg: "editing", source: "source" };
 const MODE_KEY: Record<Mode, string> = { view: "⌘1", wysiwyg: "⌘2", source: "⌘3" };
@@ -71,6 +74,19 @@ function wordCount(text: string): number {
   return words ? words.length : 0;
 }
 
+/** Average adult silent reading rate for non-fiction (Brysbaert, 2019). */
+const WORDS_PER_MINUTE = 238;
+
+export function readingTime(words: number): string {
+  if (words === 0) return "0 min";
+  const minutes = words / WORDS_PER_MINUTE;
+  if (minutes < 1) return "< 1 min";
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
 /** Shortens a path for the status bar, keeping the file name end intact. */
 function displayPath(path: string, max = 60): string {
   const short = path.replace(/^\/Users\/[^/]+\//, "~/").replace(/^\/home\/[^/]+\//, "~/").replace(/^[A-Z]:\\Users\\[^\\]+\\/i, "~\\");
@@ -91,48 +107,122 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   return node;
 }
 
+/** A one-line inline prompt anchored above the status bar. Resolves null on cancel. */
+function promptInline(label: string, placeholder: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const box = el("form", "prompt");
+    const text = el("span", "prompt__label", label);
+    const input = el("input", "prompt__input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    input.spellcheck = false;
+    box.append(text, input);
+    const done = (value: string | null) => {
+      box.remove();
+      resolve(value);
+    };
+    box.addEventListener("submit", (event) => {
+      event.preventDefault();
+      done(input.value.trim() || null);
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") done(null);
+    });
+    input.addEventListener("blur", () => setTimeout(() => box.isConnected && done(null), 120));
+    document.body.appendChild(box);
+    input.focus();
+  });
+}
+
 function boot(): void {
   const strip = document.getElementById("tabs");
+  const body = document.getElementById("body");
   const viewer = document.getElementById("viewer");
   const empty = document.getElementById("empty");
   const emptyOpen = document.getElementById("empty-open");
   const emptyNew = document.getElementById("empty-new");
   const status = document.getElementById("status");
-  if (!strip || !viewer || !empty || !emptyOpen || !emptyNew || !status) throw new Error("Shell markup missing.");
+  if (!strip || !body || !viewer || !empty || !emptyOpen || !emptyNew || !status) throw new Error("Shell markup missing.");
 
   if (/Mac/i.test(navigator.platform)) document.documentElement.classList.add("is-mac");
 
   const theme = new Theme();
   const find = new FindBar(viewer);
+  const outline = new Outline();
+  body.prepend(outline.element);
   let allowRemoteImages = readFlag(REMOTE_IMAGES_KEY, true);
   let autosave = readFlag(AUTOSAVE_KEY, false);
+  let outlineOpen = readFlag(OUTLINE_KEY, false);
   let zoomIndex = ZOOM_STEPS.indexOf(1);
 
-  // Status bar: mode · path · (spacer) · words · eol · theme
+  // Status bar: outline · mode · block · path · (spacer) · words · eol · theme
+  const outlineButton = el("button", "status__button", "☰");
+  outlineButton.type = "button";
+  outlineButton.title = "Outline (⌘⌥S)";
   const modeButton = el("button", "status__button status__button--mode");
   modeButton.type = "button";
+  const blockButton = el("button", "status__button status__button--block");
+  blockButton.type = "button";
+  blockButton.title = "Block type — click to change";
   const pathItem = el("span", "status__item status__path");
   const wordsItem = el("span", "status__item");
   const eolItem = el("span", "status__item");
-  status.append(modeButton, pathItem, el("span", "status__spacer"), wordsItem, eolItem, createThemeButton(theme));
+  status.append(outlineButton, modeButton, blockButton, pathItem, el("span", "status__spacer"), wordsItem, eolItem, createThemeButton(theme));
+
+  let popup: HTMLElement | null = null;
+  const closePopup = () => {
+    popup?.remove();
+    popup = null;
+  };
+
+  const refreshOutline = (tab: Tab | null) => {
+    if (!outlineOpen) return;
+    outline.setEntries(tab ? tabs.outlineOf(tab) : []);
+    if (tab) outline.setActive(tabs.activeOutlineIndex(tab));
+  };
+
+  const refreshCursorState = () => {
+    const tab = tabs.current;
+    if (!tab) return;
+    const type = tabs.blockTypeOf(tab);
+    blockButton.hidden = type === null;
+    if (type) blockButton.textContent = BLOCK_LABEL[type];
+    if (outlineOpen) outline.setActive(tabs.activeOutlineIndex(tab));
+  };
 
   const reflect = (tab: Tab | null) => {
     empty.hidden = tab !== null;
     status.hidden = tab === null;
+    outline.setOpen(outlineOpen && tab !== null);
+    closePopup();
     if (tab) {
       modeButton.textContent = `${MODE_LABEL[tab.mode]} ${MODE_KEY[tab.mode]}`;
       modeButton.title = "Click to cycle reading → editor → source";
       pathItem.textContent = tab.path ? displayPath(tab.path) : "unsaved";
       pathItem.title = tab.path ?? "";
-      wordsItem.textContent = `${wordCount(tabs.textOf(tab))} words`;
+      const words = wordCount(tabs.textOf(tab));
+      wordsItem.textContent = `${words} words · ${readingTime(words)}`;
+      wordsItem.title = `Reading time at ${WORDS_PER_MINUTE} words per minute`;
       eolItem.textContent = tab.baseline.eol === "\r\n" ? "CRLF" : "LF";
       find.setTarget(tab.article, tab.mode === "wysiwyg");
       find.refresh();
     } else {
       find.setTarget(null);
     }
+    refreshOutline(tab);
+    refreshCursorState();
     const name = tab ? (tab.mode === "view" ? tab.title : tab.name) : null;
     void shell.setWindowTitle(name ? `${tab?.dirty ? "• " : ""}${name} — mdwisp` : "mdwisp");
+  };
+
+  let outlineTimer: number | null = null;
+  const scheduleOutline = () => {
+    if (!outlineOpen) return;
+    if (outlineTimer) window.clearTimeout(outlineTimer);
+    outlineTimer = window.setTimeout(() => {
+      outlineTimer = null;
+      refreshOutline(tabs.current);
+    }, 350);
   };
 
   const tabs = new Tabs(strip, viewer, {
@@ -149,10 +239,49 @@ function boot(): void {
     onTabStateChange: (tab) => {
       if (tab === tabs.current) reflect(tab);
     },
+    onEdit: scheduleOutline,
     onError: reportError,
   });
 
+  const toggleOutline = () => {
+    outlineOpen = !outlineOpen;
+    writeFlag(OUTLINE_KEY, outlineOpen);
+    reflect(tabs.current);
+  };
+  outlineButton.addEventListener("click", toggleOutline);
   modeButton.addEventListener("click", () => tabs.cycleMode());
+
+  blockButton.addEventListener("click", () => {
+    if (popup) {
+      closePopup();
+      return;
+    }
+    const tab = tabs.current;
+    if (!tab) return;
+    const current = tabs.blockTypeOf(tab);
+    popup = el("div", "popup");
+    popup.setAttribute("role", "menu");
+    for (const [kind, label, key] of BLOCK_CHOICES) {
+      const item = el("button", "popup__item");
+      item.type = "button";
+      item.setAttribute("role", "menuitem");
+      const isCurrent = current === kind || (kind === "bullet" && current === "list");
+      if (isCurrent) item.classList.add("popup__item--current");
+      item.append(document.createTextNode(label), Object.assign(el("kbd", ""), { textContent: key }));
+      item.addEventListener("click", () => {
+        closePopup();
+        tabs.format(kind);
+        refreshCursorState();
+      });
+      popup.appendChild(item);
+    }
+    document.body.appendChild(popup);
+    popup.querySelector<HTMLButtonElement>("button")?.focus();
+  });
+  document.addEventListener("mousedown", (event) => {
+    if (popup && !popup.contains(event.target as Node) && event.target !== blockButton) closePopup();
+  });
+
   document.body.append(find.element);
   theme.onChange(() => tabs.retheme());
 
@@ -179,6 +308,23 @@ function boot(): void {
     else find.step(step);
   };
 
+  const applyFormat = async (kind: FormatKind) => {
+    const tab = tabs.current;
+    if (!tab) return;
+    if (tab.mode === "view") {
+      toast("switch to the editor (⌘2) or source (⌘3) to format");
+      return;
+    }
+    if (kind === "link") {
+      const href = await promptInline("link", "https://");
+      if (href) tabs.format("link", href);
+      return;
+    }
+    tabs.format(kind);
+    refreshCursorState();
+    scheduleOutline();
+  };
+
   const actions: Record<string, () => void> = {
     new: () => void tabs.newDocument(),
     open: () => void openPicker(),
@@ -198,6 +344,7 @@ function boot(): void {
     "mode-view": () => void tabs.setMode("view"),
     "mode-wysiwyg": () => void tabs.setMode("wysiwyg"),
     "mode-source": () => void tabs.setMode("source"),
+    outline: toggleOutline,
     theme: () => theme.cycle(),
     "remote-images": () => {
       allowRemoteImages = !allowRemoteImages;
@@ -235,8 +382,8 @@ function boot(): void {
     if (href.startsWith("#")) {
       const id = decodeURIComponent(href.slice(1));
       const article = tabs.current?.article;
-      const heading = article?.querySelector(`[id="${CSS.escape(id)}"]`) ?? article?.querySelector(`a[name="${CSS.escape(id)}"]`);
-      heading?.scrollIntoView({ block: "start" });
+      const heading = article?.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`) ?? article?.querySelector<HTMLElement>(`a[name="${CSS.escape(id)}"]`);
+      if (heading) viewer.scrollTop = heading.offsetTop - 24;
       return;
     }
     if (isExternalHref(href)) {
@@ -248,6 +395,22 @@ function boot(): void {
       const path = resolveRelative(current.dir, href);
       if (path) void tabs.open([path]);
     }
+  });
+
+  // Current-section tracking: scroll in reading view, caret in editors.
+  let scrollTick = false;
+  viewer.addEventListener("scroll", () => {
+    if (scrollTick || !outlineOpen) return;
+    scrollTick = true;
+    requestAnimationFrame(() => {
+      scrollTick = false;
+      const tab = tabs.current;
+      if (tab?.mode === "view") outline.setActive(tabs.activeOutlineIndex(tab));
+    });
+  });
+  document.addEventListener("selectionchange", () => {
+    const tab = tabs.current;
+    if (tab && tab.mode !== "view") refreshCursorState();
   });
 
   const flash = (button: HTMLButtonElement, state: "copied" | "failed") => {
@@ -264,6 +427,16 @@ function boot(): void {
     const mod = event.metaKey || event.ctrlKey;
     if (!mod) return;
     const key = event.key.toLowerCase();
+    if (event.altKey && /^[0-6]$/.test(key)) {
+      event.preventDefault();
+      void applyFormat(key === "0" ? "paragraph" : (`h${key}` as FormatKind));
+      return;
+    }
+    if (event.altKey && key === "s") {
+      event.preventDefault();
+      toggleOutline();
+      return;
+    }
     const id =
       key === "f" ? "find" :
       key === "g" ? (event.shiftKey ? "find-prev" : "find-next") :
@@ -284,7 +457,10 @@ function boot(): void {
     actions[id]?.();
   });
 
-  void shell.onMenu((id) => actions[id]?.());
+  void shell.onMenu((id) => {
+    if (id.startsWith("fmt-")) void applyFormat(id.slice(4) as FormatKind);
+    else actions[id]?.();
+  });
   void shell.onDrop((paths) => void tabs.open(paths.filter(isMarkdownPath)));
   void shell.onCloseRequested(() => tabs.confirmCloseAll());
   void shell

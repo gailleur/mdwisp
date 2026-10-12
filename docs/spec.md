@@ -61,6 +61,12 @@ does, not how any other product does it. All implementation is original.
   closes. Matches are highlighted; the active match is scrolled into view.
   Case-insensitive, literal (not regex).
 - Zoom: Cmd/Ctrl + / − / 0.
+- Outline: an optional left sidebar (⌘⌥S, View ▸ Outline, or ☰ in the
+  status bar) lists the document's headings with indentation. Clicking one
+  jumps to it in whichever mode is active; the current section is
+  highlighted as the reader scrolls or the cursor moves. The choice to show
+  it persists.
+- Headings carry stable ids (GitHub-style slugs) so `#anchor` links work.
 - Links to `http(s)` open in the system browser. `mailto:` and similar open
   their system handler. Links to other Markdown files open in a new tab.
 - Print via the system print dialog. PDF export is "Save as PDF" from that
@@ -76,6 +82,13 @@ does, not how any other product does it. All implementation is original.
 - In the editor, math and Mermaid blocks appear as their source text; the
   reading view renders them. This keeps a single KaTeX and keeps the editor
   small.
+- Formatting is reachable three ways: a native **Format** menu (Paragraph,
+  Heading 1–6, Bold, Italic, Strikethrough, Inline Code, Link, Bulleted /
+  Numbered / Task list, Quote, Code Block, Horizontal Rule, Table) with
+  shortcuts (⌘⌥0–6 for block types, ⌘B/⌘I/⌘E/⌘K, ⌘⇧7/9/L/./C); a
+  block-type control in the status bar that shows the block at the cursor
+  and opens a picker; and Markdown input rules in the editor (`# ` makes a
+  heading). The same actions work in source mode as text transforms.
 - Unsaved edits are previewed when switching to reading view; the file on
   disk is untouched until Save.
 - New (untitled) documents open in the editor and ask for a location on

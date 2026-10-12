@@ -20,6 +20,12 @@ describe("markdownToHtml", () => {
     expect(html).toContain('type="checkbox"');
   });
 
+  it("gives headings stable ids for anchors and the outline", async () => {
+    const html = await markdownToHtml("# Hello World\n\n## Code & Data");
+    expect(html).toContain('<h1 id="hello-world">');
+    expect(html).toContain('<h2 id="code--data">');
+  });
+
   it("passes raw HTML through for the sanitiser", async () => {
     const html = await markdownToHtml('<details><summary>s</summary>body</details>\n\n<script>x</script>');
     expect(html).toContain("<details>");

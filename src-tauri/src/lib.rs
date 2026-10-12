@@ -240,6 +240,43 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&find_prev)
         .build()?;
 
+    // Format: block types and inline marks. Ids are "fmt-<kind>" and the
+    // frontend applies them to whichever editor is active.
+    let fmt = |id: &str, label: &str, accel: Option<&str>| -> tauri::Result<tauri::menu::MenuItem<R>> {
+        let b = MenuItemBuilder::with_id(format!("fmt-{id}"), label);
+        match accel {
+            Some(a) => b.accelerator(a).build(app),
+            None => b.build(app),
+        }
+    };
+    let format = SubmenuBuilder::new(app, "Format")
+        .item(&fmt("paragraph", "Paragraph", Some("CmdOrCtrl+Alt+0"))?)
+        .item(&fmt("h1", "Heading 1", Some("CmdOrCtrl+Alt+1"))?)
+        .item(&fmt("h2", "Heading 2", Some("CmdOrCtrl+Alt+2"))?)
+        .item(&fmt("h3", "Heading 3", Some("CmdOrCtrl+Alt+3"))?)
+        .item(&fmt("h4", "Heading 4", Some("CmdOrCtrl+Alt+4"))?)
+        .item(&fmt("h5", "Heading 5", Some("CmdOrCtrl+Alt+5"))?)
+        .item(&fmt("h6", "Heading 6", Some("CmdOrCtrl+Alt+6"))?)
+        .separator()
+        .item(&fmt("bold", "Bold", Some("CmdOrCtrl+B"))?)
+        .item(&fmt("italic", "Italic", Some("CmdOrCtrl+I"))?)
+        .item(&fmt("strike", "Strikethrough", Some("CmdOrCtrl+Shift+X"))?)
+        .item(&fmt("code", "Inline Code", Some("CmdOrCtrl+E"))?)
+        .item(&fmt("link", "Link…", Some("CmdOrCtrl+K"))?)
+        .separator()
+        .item(&fmt("bullet", "Bulleted List", Some("CmdOrCtrl+Shift+7"))?)
+        .item(&fmt("ordered", "Numbered List", Some("CmdOrCtrl+Shift+9"))?)
+        .item(&fmt("task", "Task List", Some("CmdOrCtrl+Shift+L"))?)
+        .item(&fmt("quote", "Quote", Some("CmdOrCtrl+Shift+."))?)
+        .item(&fmt("codeblock", "Code Block", Some("CmdOrCtrl+Shift+C"))?)
+        .separator()
+        .item(&fmt("hr", "Horizontal Rule", None)?)
+        .item(&fmt("table", "Table", None)?)
+        .build()?;
+
+    let outline = MenuItemBuilder::with_id("outline", "Outline")
+        .accelerator("CmdOrCtrl+Alt+S")
+        .build(app)?;
     let theme = MenuItemBuilder::with_id("theme", "Cycle Theme")
         .accelerator("CmdOrCtrl+Shift+D")
         .build(app)?;
@@ -268,6 +305,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&mode_wysiwyg)
         .item(&mode_source)
         .separator()
+        .item(&outline)
         .item(&theme)
         .item(&remote_images)
         .separator()
@@ -299,7 +337,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         menu = menu.item(&app_menu);
     }
 
-    let menu = menu.items(&[&file, &edit, &view]).build()?;
+    let menu = menu.items(&[&file, &edit, &format, &view]).build()?;
     app.set_menu(menu)?;
     Ok(())
 }

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Gailleur Labs. All rights reserved.
 
 import rehypeRaw from "rehype-raw";
+import rehypeSlug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
@@ -33,6 +34,7 @@ const processor = unified()
   .use(remarkGfm)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeRaw)
+  .use(rehypeSlug)
   .use(rehypeStringify);
 
 export async function markdownToHtml(markdown: string): Promise<string> {

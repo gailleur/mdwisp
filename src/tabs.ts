@@ -3,6 +3,8 @@
 
 import { denormalise, normalise, untitledName, type TextBaseline } from "./document";
 import type { WysiwygEditor } from "./editor";
+import type { BlockType, FormatKind } from "./format";
+import { headingsFromMarkdown, type OutlineEntry } from "./outline";
 import { renderDiagrams, renderDocument, type RenderContext } from "./render";
 import type { SourceEditor } from "./source";
 import type { EffectiveTheme } from "./theme";
@@ -33,6 +35,8 @@ export interface TabHost {
   autosave: () => boolean;
   onActiveChange: (tab: Tab | null) => void;
   onTabStateChange: (tab: Tab) => void;
+  /** Fires on every edit (not just dirty transitions). */
+  onEdit?: (tab: Tab) => void;
   onError: (message: string) => void;
 }
 
@@ -101,6 +105,55 @@ export class Tabs {
   /** Current buffer of a tab, from whichever surface is mounted. */
   textOf(tab: Tab): string {
     return this.currentText(tab);
+  }
+
+  /** Applies a Format action to the active editor; no-op in reading view. */
+  format(kind: FormatKind, arg?: string): void {
+    const tab = this.active;
+    if (!tab) return;
+    if (tab.mode === "wysiwyg") tab.wysiwyg?.format(kind, arg);
+    else if (tab.mode === "source") tab.source?.format(kind, arg);
+  }
+
+  blockTypeOf(tab: Tab): BlockType | null {
+    if (tab.mode === "wysiwyg") return tab.wysiwyg?.blockType() ?? null;
+    if (tab.mode === "source") return tab.source?.blockType() ?? null;
+    return null;
+  }
+
+  /** Headings of the tab in its current surface, each with a jump action. */
+  outlineOf(tab: Tab): OutlineEntry[] {
+    if (tab.mode === "wysiwyg" && tab.wysiwyg) {
+      const editor = tab.wysiwyg;
+      return editor.headings().map((h) => ({ level: h.level, text: h.text, go: () => editor.goTo(h.pos) }));
+    }
+    if (tab.mode === "source" && tab.source) {
+      const source = tab.source;
+      return headingsFromMarkdown(source.getText()).map((h) => ({ level: h.level, text: h.text, go: () => source.goToLine(h.line) }));
+    }
+    const viewer = this.viewer;
+    return Array.from(tab.article.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6")).map((el) => ({
+      level: Number(el.tagName[1]),
+      text: el.textContent?.trim() ?? "",
+      go: () => {
+        viewer.scrollTop = el.offsetTop - 24;
+      },
+    }));
+  }
+
+  /** Index of the outline entry the reader/cursor is currently in. */
+  activeOutlineIndex(tab: Tab): number {
+    if (tab.mode === "wysiwyg" && tab.wysiwyg) {
+      const pos = tab.wysiwyg.cursorPos();
+      return lastIndexWhere(tab.wysiwyg.headings(), (h) => h.pos <= pos);
+    }
+    if (tab.mode === "source" && tab.source) {
+      const line = tab.source.cursorLine();
+      return lastIndexWhere(headingsFromMarkdown(tab.source.getText()), (h) => h.line <= line);
+    }
+    const top = this.viewer.scrollTop + 40;
+    const headings = Array.from(tab.article.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"));
+    return lastIndexWhere(headings, (el) => el.offsetTop <= top);
   }
 
   async open(paths: string[]): Promise<void> {
@@ -396,6 +449,7 @@ export class Tabs {
 
   private onEdit(tab: Tab): void {
     this.updateDirty(tab);
+    this.host.onEdit?.(tab);
     if (tab.dirty && tab.path && this.host.autosave() && !tab.conflict) {
       if (tab.autosaveTimer) window.clearTimeout(tab.autosaveTimer);
       tab.autosaveTimer = window.setTimeout(() => {
@@ -495,6 +549,13 @@ export class Tabs {
     tab.banner.hidden = true;
     tab.banner.replaceChildren();
   }
+}
+
+function lastIndexWhere<T>(items: T[], test: (item: T) => boolean): number {
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    if (test(items[i]!)) return i;
+  }
+  return -1;
 }
 
 function describe(error: unknown): string {

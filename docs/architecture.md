@@ -47,6 +47,8 @@ forms, scripts only from the bundle.
 | `document.ts` | Pure text helpers: LF/CRLF normalisation, final-newline preservation, untitled names. |
 | `editor.ts` | Milkdown (ProseMirror) wrapper: pristine detection, image URL rewriting, task toggles, cursor anchoring. |
 | `source.ts` | CodeMirror 6 wrapper with Markdown highlighting and search panel. |
+| `format.ts` | Format action and block-type vocabulary shared by menu, shortcuts, status bar and both editors. |
+| `outline.ts` | Sidebar rendering plus the Markdown heading scanner used in source mode. |
 | `render.ts` | Markdown → sanitised HTML → DOM, then KaTeX, Mermaid, code-copy controls. |
 | `sanitize.ts` | DOMPurify configuration and hooks. Unit-tested against hostile input. |
 | `find.ts` | In-document search bar and highlighting. |

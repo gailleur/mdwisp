@@ -39,6 +39,14 @@ One accent colour does all the signalling: active tab underline, dirty dot,
 links, task checks, mode label, find highlight, focus ring. Everything else
 is a grey.
 
+## Status line facts
+
+Word count is whitespace-separated tokens of the current buffer. Reading
+time divides it by 238 words per minute — the mean adult silent reading
+rate for non-fiction in Brysbaert's 2019 meta-analysis — and rounds to the
+minute (`< 1 min` under a minute). It is an estimate, shown as such in the
+tooltip, and ignores images and code.
+
 ## Rules
 
 - No floating controls over the document. Controls live in the bar or the
