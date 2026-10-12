@@ -52,6 +52,11 @@
   box-sizing: border-box;
 }
 
+/* Components set their own display, so the hidden attribute must win. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   height: 100%;
@@ -247,6 +252,12 @@ body {
 
 .document a:hover {
   text-decoration: underline;
+}
+
+/* A link whose scheme was stripped by the sanitiser is just text. */
+.document a:not([href]) {
+  color: inherit;
+  text-decoration: none;
 }
 
 .document .link--external::after {
@@ -707,6 +718,10 @@ body {
   white-space: pre-wrap;
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
   z-index: 20;
+}
+
+.toast--error {
+  border-color: #dc2626;
 }
 
 .clipboard-fallback {

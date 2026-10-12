@@ -6,7 +6,14 @@
 // was never changed reports `pristine`, so callers can keep the original
 // bytes instead of re-serialising.
 
-import { Editor, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, rootCtx } from "@milkdown/kit/core";
+import {
+  Editor,
+  defaultValueCtx,
+  editorViewCtx,
+  editorViewOptionsCtx,
+  remarkStringifyOptionsCtx,
+  rootCtx,
+} from "@milkdown/kit/core";
 import { clipboard } from "@milkdown/kit/plugin/clipboard";
 import { cursor } from "@milkdown/kit/plugin/cursor";
 import { history } from "@milkdown/kit/plugin/history";
@@ -49,6 +56,17 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
     .config((ctx) => {
       ctx.set(rootCtx, container);
       ctx.set(defaultValueCtx, markdown);
+      // Serialise in the most common hand-written style so edits produce
+      // small, predictable diffs.
+      ctx.update(remarkStringifyOptionsCtx, (prev) => ({
+        ...prev,
+        bullet: "-" as const,
+        listItemIndent: "one" as const,
+        fences: true,
+        rule: "-" as const,
+        emphasis: "*" as const,
+        strong: "*" as const,
+      }));
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
         attributes: { class: "document editor", spellcheck: "true" },

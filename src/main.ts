@@ -31,13 +31,19 @@ function writeFlag(key: string, value: boolean): void {
   }
 }
 
-function toast(message: string): void {
+function toast(message: string, isError = false): void {
   const el = document.createElement("div");
-  el.className = "toast";
-  el.setAttribute("role", "status");
+  el.className = isError ? "toast toast--error" : "toast";
+  el.setAttribute("role", isError ? "alert" : "status");
   el.textContent = message;
+  el.addEventListener("click", () => el.remove());
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  setTimeout(() => el.remove(), isError ? 10000 : 3000);
+}
+
+function reportError(message: string): void {
+  console.error(message);
+  toast(message, true);
 }
 
 async function copyText(text: string): Promise<void> {
@@ -110,7 +116,7 @@ function boot(): void {
     onTabStateChange: (tab) => {
       if (tab === tabs.current) reflect(tab);
     },
-    onError: toast,
+    onError: reportError,
   });
 
   modePill.addEventListener("click", () => tabs.cycleMode());
@@ -201,7 +207,7 @@ function boot(): void {
       return;
     }
     if (isExternalHref(href)) {
-      void shell.openExternal(href).catch((error: unknown) => toast(String(error)));
+      void shell.openExternal(href).catch((error: unknown) => reportError(String(error)));
       return;
     }
     const current = tabs.current;
