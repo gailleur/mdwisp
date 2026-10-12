@@ -11,8 +11,11 @@
     <main class="viewer" id="viewer">
       <section class="empty" id="empty">
         <p class="empty__mark" aria-hidden="true">~</p>
-        <p>Open a Markdown file to begin.</p>
-        <button class="empty__open" id="empty-open" type="button">Open…</button>
+        <p>Open a Markdown file, or start a new one.</p>
+        <div class="empty__actions">
+          <button class="empty__open" id="empty-open" type="button">Open…</button>
+          <button class="empty__open" id="empty-new" type="button">New</button>
+        </div>
       </section>
     </main>
     <script type="module" src="/src/main.ts"></script>

@@ -43,7 +43,10 @@ forms, scripts only from the bundle.
 | --- | --- |
 | `main.ts` | Boot: wire shell events, menu commands, drag-and-drop, tabs. |
 | `shell.ts` | The only module that imports Tauri APIs. Everything else is pure DOM/TS and runs in tests. |
-| `tabs.ts` | Document tabs: open, focus, close, title, live-reload watch per tab. |
+| `tabs.ts` | Document tabs and the per-tab state machine: mode (reading / editor / source), buffer, baseline, dirty, save, disk-change conflicts. |
+| `document.ts` | Pure text helpers: LF/CRLF normalisation, final-newline preservation, untitled names. |
+| `editor.ts` | Milkdown (ProseMirror) wrapper: pristine detection, image URL rewriting, task toggles, cursor anchoring. |
+| `source.ts` | CodeMirror 6 wrapper with Markdown highlighting and search panel. |
 | `render.ts` | Markdown → sanitised HTML → DOM, then KaTeX, Mermaid, code-copy controls. |
 | `sanitize.ts` | DOMPurify configuration and hooks. Unit-tested against hostile input. |
 | `find.ts` | In-document search bar and highlighting. |
@@ -56,8 +59,17 @@ The UI is a tab strip, a document, a find bar and a theme button. A framework
 would be the largest dependency in the bundle and would buy nothing. Direct
 DOM code keeps the footprint small and the behaviour easy to audit.
 
-## Phase 3 (editor) plan
+## Editing model
 
-Milkdown (ProseMirror) for WYSIWYG and CodeMirror 6 for source mode will
-mount inside the same tab model. The remark pipeline is shared with Milkdown
-so view and edit modes agree on parsing.
+Each tab holds a `text` buffer (LF-normalised) and a `baseline` (what is on
+disk, with its line-ending convention). Exactly one of three surfaces is
+mounted at a time: the rendered reading view, a Milkdown editor, or a
+CodeMirror editor. Switching modes pulls the current buffer out of the
+mounted surface, tears it down, and mounts the next. Save writes the buffer
+through `save_document`, which is atomic.
+
+A ProseMirror document that equals the one loaded is "pristine", and the
+original text is kept rather than re-serialised. Dirty is therefore a
+document-level comparison in the editor and a string comparison in source
+mode. Milkdown and the reading view share remark for parsing, so what the
+editor shows matches what the viewer renders.

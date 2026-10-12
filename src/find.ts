@@ -1,19 +1,105 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 // Copyright (c) 2026 Gailleur. All rights reserved.
 
-// In-document search. Matches are wrapped in <mark> elements and unwrapped
-// again on clear, so the rendered DOM is restored exactly.
+// In-document search. Where the CSS Custom Highlight API exists, matches are
+// painted without touching the DOM, which is what makes searching inside a
+// live ProseMirror editor safe. Otherwise matches are wrapped in <mark>
+// elements and unwrapped on clear (reading view only).
+
+interface Highlighter {
+  apply(ranges: Range[], active: number): void;
+  clear(): void;
+  readonly mutatesDom: boolean;
+}
+
+function cssHighlighter(): Highlighter | null {
+  if (typeof Highlight === "undefined" || typeof CSS === "undefined" || !CSS.highlights) return null;
+  const registry = CSS.highlights;
+  const HighlightCtor = Highlight;
+  return {
+    mutatesDom: false,
+    apply(ranges, active) {
+      registry.set("find", new HighlightCtor(...ranges));
+      const current = ranges[active];
+      if (current) registry.set("find-active", new HighlightCtor(current));
+      else registry.delete("find-active");
+    },
+    clear() {
+      registry.delete("find");
+      registry.delete("find-active");
+    },
+  };
+}
+
+function markHighlighter(): Highlighter {
+  let marks: HTMLElement[] = [];
+  return {
+    mutatesDom: true,
+    apply(ranges, active) {
+      this.clear();
+      ranges.forEach((range, index) => {
+        const mark = document.createElement("mark");
+        mark.className = index === active ? "find__match find__match--active" : "find__match";
+        try {
+          range.surroundContents(mark);
+          marks.push(mark);
+        } catch {
+          // Range crosses element boundaries; skip rather than corrupt.
+        }
+      });
+    },
+    clear() {
+      for (const mark of marks) {
+        const parent = mark.parentNode;
+        if (!parent) continue;
+        parent.replaceChild(document.createTextNode(mark.textContent ?? ""), mark);
+        parent.normalize();
+      }
+      marks = [];
+    },
+  };
+}
+
+export function findRanges(root: Node, query: string): Range[] {
+  const needle = query.toLowerCase();
+  if (!needle) return [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
+      const tag = node.parentElement?.tagName;
+      return tag === "SCRIPT" || tag === "STYLE" ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const ranges: Range[] = [];
+  while (walker.nextNode()) {
+    const text = walker.currentNode as Text;
+    const haystack = (text.nodeValue ?? "").toLowerCase();
+    let index = haystack.indexOf(needle);
+    while (index >= 0) {
+      const range = document.createRange();
+      range.setStart(text, index);
+      range.setEnd(text, index + needle.length);
+      ranges.push(range);
+      index = haystack.indexOf(needle, index + needle.length);
+    }
+  }
+  return ranges;
+}
 
 export class FindBar {
   readonly element: HTMLElement;
   private readonly input: HTMLInputElement;
   private readonly count: HTMLElement;
-  private marks: HTMLElement[] = [];
+  private readonly painter: Highlighter;
+  private ranges: Range[] = [];
   private active = -1;
   private query = "";
   private target: HTMLElement | null = null;
+  private allowDomMutation = true;
 
   constructor(private readonly scroller: HTMLElement) {
+    this.painter = cssHighlighter() ?? markHighlighter();
+
     this.element = document.createElement("section");
     this.element.className = "find";
     this.element.setAttribute("role", "search");
@@ -48,11 +134,20 @@ export class FindBar {
     this.element.append(this.input, this.count, prev, next, close);
   }
 
-  /** The element whose text is searched. Changing it clears the search. */
-  setTarget(target: HTMLElement | null): void {
-    if (target === this.target) return;
+  /** True when searching this target would require editing its DOM. */
+  get requiresDomMutation(): boolean {
+    return this.painter.mutatesDom;
+  }
+
+  /**
+   * The element whose text is searched. `live` targets (editors) are only
+   * searchable with a non-mutating painter.
+   */
+  setTarget(target: HTMLElement | null, live = false): void {
+    if (target === this.target && live === !this.allowDomMutation) return;
     this.clear();
     this.target = target;
+    this.allowDomMutation = !live;
     if (this.isOpen && this.query) this.search(this.query);
   }
 
@@ -79,9 +174,9 @@ export class FindBar {
     else this.open();
   }
 
-  /** Called by the owner when the target was re-rendered. */
+  /** Called when the target's content was replaced. */
   refresh(): void {
-    this.marks = [];
+    this.ranges = [];
     this.active = -1;
     if (this.isOpen && this.query) this.search(this.query, true);
     else this.updateCount();
@@ -92,7 +187,7 @@ export class FindBar {
       this.open();
       return;
     }
-    if (this.marks.length === 0) return;
+    if (this.ranges.length === 0) return;
     this.activate(this.active + direction);
   }
 
@@ -106,6 +201,10 @@ export class FindBar {
     return button;
   }
 
+  private get searchable(): boolean {
+    return this.target !== null && (this.allowDomMutation || !this.painter.mutatesDom);
+  }
+
   private search(raw: string, keepIndex = false): void {
     const previous = this.active;
     this.clear();
@@ -114,8 +213,12 @@ export class FindBar {
       this.updateCount();
       return;
     }
-    this.marks = highlight(this.target, this.query);
-    if (this.marks.length === 0) {
+    if (!this.searchable) {
+      this.count.textContent = "n/a";
+      return;
+    }
+    this.ranges = findRanges(this.target, this.query);
+    if (this.ranges.length === 0) {
       this.updateCount();
       return;
     }
@@ -123,82 +226,29 @@ export class FindBar {
   }
 
   private activate(index: number): void {
-    const n = this.marks.length;
+    const n = this.ranges.length;
     const next = ((index % n) + n) % n;
-    this.marks[this.active]?.classList.remove("find__match--active");
-    const mark = this.marks[next];
-    if (!mark) return;
-    mark.classList.add("find__match--active");
     this.active = next;
+    this.painter.apply(this.ranges, next);
     this.updateCount();
-    scrollIntoScroller(this.scroller, mark);
+    const range = this.ranges[next];
+    if (range) scrollIntoScroller(this.scroller, range.getBoundingClientRect());
   }
 
   private clear(): void {
-    for (const mark of this.marks) {
-      const parent = mark.parentNode;
-      if (!parent) continue;
-      parent.replaceChild(document.createTextNode(mark.textContent ?? ""), mark);
-      parent.normalize();
-    }
-    this.marks = [];
+    this.painter.clear();
+    this.ranges = [];
     this.active = -1;
   }
 
   private updateCount(): void {
     if (!this.query) this.count.textContent = "";
-    else if (this.marks.length === 0) this.count.textContent = "0";
-    else this.count.textContent = `${this.active + 1}/${this.marks.length}`;
+    else if (this.ranges.length === 0) this.count.textContent = "0";
+    else this.count.textContent = `${this.active + 1}/${this.ranges.length}`;
   }
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-export function highlight(root: HTMLElement, query: string): HTMLElement[] {
-  const pattern = new RegExp(escapeRegExp(query), "gi");
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT;
-      const tag = node.parentElement?.tagName;
-      return tag === "SCRIPT" || tag === "STYLE" ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
-    },
-  });
-
-  const nodes: Text[] = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
-
-  const marks: HTMLElement[] = [];
-  for (const node of nodes) {
-    const text = node.nodeValue ?? "";
-    pattern.lastIndex = 0;
-    let match = pattern.exec(text);
-    if (!match) continue;
-
-    const fragment = document.createDocumentFragment();
-    let last = 0;
-    while (match) {
-      const start = match.index;
-      const end = start + match[0].length;
-      if (end === start) break;
-      if (start > last) fragment.appendChild(document.createTextNode(text.slice(last, start)));
-      const mark = document.createElement("mark");
-      mark.className = "find__match";
-      mark.textContent = text.slice(start, end);
-      fragment.appendChild(mark);
-      marks.push(mark);
-      last = end;
-      match = pattern.exec(text);
-    }
-    if (last < text.length) fragment.appendChild(document.createTextNode(text.slice(last)));
-    node.parentNode?.replaceChild(fragment, node);
-  }
-  return marks;
-}
-
-function scrollIntoScroller(scroller: HTMLElement, el: HTMLElement): void {
-  const box = el.getBoundingClientRect();
+function scrollIntoScroller(scroller: HTMLElement, box: DOMRect): void {
   const view = scroller.getBoundingClientRect();
   if (box.top < view.top || box.bottom > view.bottom) {
     scroller.scrollTop += box.top - view.top - view.height / 2;

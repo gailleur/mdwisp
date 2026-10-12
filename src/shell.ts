@@ -8,7 +8,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { ask, open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { watch } from "@tauri-apps/plugin-fs";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -23,6 +23,34 @@ export interface ShellDocument {
 
 export function openDocument(path: string): Promise<ShellDocument> {
   return invoke<ShellDocument>("open_document", { path });
+}
+
+export interface SavedDocument {
+  path: string;
+  name: string;
+  dir: string;
+}
+
+export function saveDocument(path: string, text: string): Promise<SavedDocument> {
+  return invoke<SavedDocument>("save_document", { path, text });
+}
+
+export async function pickSavePath(defaultName: string): Promise<string | null> {
+  return saveDialog({
+    defaultPath: defaultName,
+    filters: [{ name: "Markdown", extensions: MARKDOWN_EXTENSIONS }],
+  });
+}
+
+export function confirmDiscard(message: string): Promise<boolean> {
+  return ask(message, { title: "Unsaved changes", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" });
+}
+
+/** `handler` returns false to keep the window open. */
+export function onCloseRequested(handler: () => Promise<boolean>): Promise<UnlistenFn> {
+  return getCurrentWindow().onCloseRequested(async (event) => {
+    if (!(await handler())) event.preventDefault();
+  });
 }
 
 export function takePendingFiles(): Promise<string[]> {

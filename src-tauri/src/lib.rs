@@ -105,6 +105,57 @@ fn open_document<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Document
     })
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SavedDocument {
+    path: String,
+    name: String,
+    dir: String,
+}
+
+/// Writes a document atomically (temp file + rename) so a crash mid-write
+/// never leaves a truncated file, then grants access to its directory as
+/// `open_document` does. Only Markdown extensions may be written.
+#[tauri::command]
+fn save_document<R: Runtime>(app: AppHandle<R>, path: String, text: String) -> Result<SavedDocument, String> {
+    let requested = PathBuf::from(&path);
+    if !looks_like_markdown(&requested) {
+        return Err("Only Markdown files can be saved.".into());
+    }
+    let name = requested
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .filter(|n| !n.is_empty())
+        .ok_or_else(|| "Missing file name.".to_string())?;
+    let dir = requested
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(std::fs::canonicalize)
+        .unwrap_or_else(|| std::env::current_dir())
+        .map_err(|e| e.to_string())?;
+    let target = dir.join(&name);
+
+    let temp = dir.join(format!(".{name}.mdwisp-{}.tmp", std::process::id()));
+    std::fs::write(&temp, text.as_bytes()).map_err(|e| e.to_string())?;
+    if let Err(error) = std::fs::rename(&temp, &target) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(error.to_string());
+    }
+
+    app.fs_scope()
+        .allow_directory(&dir, true)
+        .map_err(|e| e.to_string())?;
+    app.asset_protocol_scope()
+        .allow_directory(&dir, true)
+        .map_err(|e| e.to_string())?;
+
+    Ok(SavedDocument {
+        path: target.to_string_lossy().into_owned(),
+        name,
+        dir: dir.to_string_lossy().into_owned(),
+    })
+}
+
 #[tauri::command]
 fn take_pending_files(pending: State<'_, PendingFiles>) -> Vec<String> {
     pending.0.lock().map(|mut l| std::mem::take(&mut *l)).unwrap_or_default()
@@ -126,9 +177,19 @@ fn print_page<R: Runtime>(window: tauri::WebviewWindow<R>) -> Result<bool, Strin
 }
 
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    let new_doc = MenuItemBuilder::with_id("new", "New")
+        .accelerator("CmdOrCtrl+N")
+        .build(app)?;
     let open = MenuItemBuilder::with_id("open", "Open…")
         .accelerator("CmdOrCtrl+O")
         .build(app)?;
+    let save = MenuItemBuilder::with_id("save", "Save")
+        .accelerator("CmdOrCtrl+S")
+        .build(app)?;
+    let save_as = MenuItemBuilder::with_id("save-as", "Save As…")
+        .accelerator("CmdOrCtrl+Shift+S")
+        .build(app)?;
+    let autosave = MenuItemBuilder::with_id("autosave", "Toggle Autosave").build(app)?;
     let reload = MenuItemBuilder::with_id("reload", "Reload")
         .accelerator("CmdOrCtrl+R")
         .build(app)?;
@@ -140,7 +201,12 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .build(app)?;
 
     let mut file = SubmenuBuilder::new(app, "File")
+        .item(&new_doc)
         .item(&open)
+        .separator()
+        .item(&save)
+        .item(&save_as)
+        .item(&autosave)
         .item(&reload)
         .separator()
         .item(&print)
@@ -188,7 +254,20 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .build(app)?;
     let remote_images = MenuItemBuilder::with_id("remote-images", "Toggle Remote Images")
         .build(app)?;
+    let mode_view = MenuItemBuilder::with_id("mode-view", "Reading")
+        .accelerator("CmdOrCtrl+1")
+        .build(app)?;
+    let mode_wysiwyg = MenuItemBuilder::with_id("mode-wysiwyg", "Editor")
+        .accelerator("CmdOrCtrl+2")
+        .build(app)?;
+    let mode_source = MenuItemBuilder::with_id("mode-source", "Source")
+        .accelerator("CmdOrCtrl+3")
+        .build(app)?;
     let view = SubmenuBuilder::new(app, "View")
+        .item(&mode_view)
+        .item(&mode_wysiwyg)
+        .item(&mode_source)
+        .separator()
         .item(&theme)
         .item(&remote_images)
         .separator()
@@ -243,6 +322,7 @@ pub fn run() {
         .manage(PendingFiles::default())
         .invoke_handler(tauri::generate_handler![
             open_document,
+            save_document,
             take_pending_files,
             print_page
         ])

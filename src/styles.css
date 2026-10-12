@@ -162,9 +162,14 @@ body {
   margin: 0;
 }
 
-.empty__open {
-  justify-self: center;
+.empty__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
   margin-top: 8px;
+}
+
+.empty__open {
   padding: 6px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -506,6 +511,185 @@ body {
   opacity: 1;
 }
 
+/* Tabs: dirty indicator ------------------------------------------------- */
+
+.tab--dirty .tab__label::before {
+  content: "•";
+  margin-right: 6px;
+  color: var(--accent);
+}
+
+/* Panels, banners, mode pill -------------------------------------------- */
+
+.panel {
+  min-height: 100%;
+}
+
+.banner {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--mark) 55%, var(--bg));
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  z-index: 5;
+}
+
+.banner__action {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 12px var(--font);
+  cursor: default;
+}
+
+.banner__action:hover {
+  border-color: var(--accent);
+}
+
+.mode {
+  position: fixed;
+  right: 60px;
+  bottom: 20px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--chrome);
+  color: var(--muted);
+  font: 11px var(--mono);
+  letter-spacing: 0.04em;
+  cursor: default;
+  opacity: 0.7;
+  z-index: 10;
+}
+
+.mode:hover {
+  opacity: 1;
+  color: var(--fg);
+}
+
+.mode[data-mode="wysiwyg"],
+.mode[data-mode="source"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* WYSIWYG editor -------------------------------------------------------- */
+
+.editor-host {
+  min-height: 100%;
+}
+
+.editor-host .ProseMirror {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  outline: none;
+  min-height: calc(100vh - 120px);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.editor-host .ProseMirror p.is-empty:first-child::before,
+.editor-host .ProseMirror > p:only-child:empty::before {
+  content: "Start writing…";
+  color: var(--muted);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+.editor-host .ProseMirror li[data-item-type="task"] {
+  list-style: none;
+  margin-left: -1.4em;
+  padding-left: 1.6em;
+  position: relative;
+}
+
+.editor-host .ProseMirror li[data-item-type="task"]::before {
+  content: "☐";
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+  cursor: default;
+}
+
+.editor-host .ProseMirror li[data-item-type="task"][data-checked="true"]::before {
+  content: "☑";
+  color: var(--accent);
+}
+
+.editor-host .ProseMirror pre {
+  position: relative;
+}
+
+.editor-host .ProseMirror pre::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  color: var(--muted);
+  font: 11px var(--mono);
+}
+
+.editor-host .ProseMirror hr {
+  margin: 2em 0;
+}
+
+.editor-host .ProseMirror .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.editor-host .ProseMirror table {
+  display: table;
+  width: 100%;
+}
+
+.editor-host .ProseMirror td,
+.editor-host .ProseMirror th {
+  min-width: 2em;
+}
+
+.editor-host .ProseMirror .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  pointer-events: none;
+}
+
+.editor-host .ProseMirror a {
+  color: var(--accent);
+}
+
+/* Source editor --------------------------------------------------------- */
+
+.source-host {
+  min-height: 100%;
+}
+
+.source-host .cm-editor {
+  min-height: calc(100vh - 60px);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Find highlights (CSS Highlight API) ----------------------------------- */
+
+::highlight(find) {
+  background-color: var(--mark);
+  color: inherit;
+}
+
+::highlight(find-active) {
+  background-color: var(--mark-active);
+}
+
 /* Misc ------------------------------------------------------------------ */
 
 .toast {
@@ -538,6 +722,8 @@ body {
   .tabs,
   .find,
   .theme-toggle,
+  .mode,
+  .banner,
   .toast,
   .code__copy {
     display: none !important;

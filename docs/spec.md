@@ -67,13 +67,36 @@ does, not how any other product does it. All implementation is original.
   dialog on every platform (phase 4 may add a direct exporter).
 - Reload on demand (Cmd/Ctrl+R) in addition to live reload.
 
-## 5. Editing (phase 3 — not in the initial viewer release)
+## 5. Editing
 
-- WYSIWYG mode and source mode, toggleable, cursor position preserved.
-- Save, Save As, dirty indicator in the tab, prompt on close with unsaved
-  changes, detection of external changes while editing.
-- Round-trip fidelity: a document opened and saved without edits is
-  byte-identical.
+- Three modes per tab: reading (rendered), editor (WYSIWYG, ProseMirror via
+  Milkdown) and source (CodeMirror). Cmd/Ctrl+1/2/3 switch; a pill in the
+  corner shows the mode and cycles it. The cursor lands on the same block or
+  line when switching between editor and source.
+- In the editor, math and Mermaid blocks appear as their source text; the
+  reading view renders them. This keeps a single KaTeX and keeps the editor
+  small.
+- Unsaved edits are previewed when switching to reading view; the file on
+  disk is untouched until Save.
+- New (untitled) documents open in the editor and ask for a location on
+  first save. Save As moves the tab to the new path.
+- Saves are atomic (temp file + rename). Only Markdown extensions may be
+  written. Line endings (LF/CRLF) and the presence of a final newline are
+  preserved from the original file.
+- Dirty indicator in the tab and window title; prompt on tab close, window
+  close and reload when there are unsaved changes.
+- Autosave is an opt-in toggle (off by default); it saves one second after
+  the last edit and never while a disk conflict is pending.
+- External changes: if the file changes on disk and there are no unsaved
+  edits, the buffer reloads. If there are unsaved edits, a banner offers
+  "Reload from disk" or "Keep my changes" (the next save overwrites).
+- Round-trip fidelity: a document opened and closed without edits is never
+  written; a document edited in the WYSIWYG editor is serialised to
+  normalised Markdown, so formatting may change (e.g. `*em*` → `_em_`). The
+  source editor writes exactly what is in the buffer.
+- Find works in reading and source modes everywhere, and in the editor on
+  webviews with the CSS Custom Highlight API (Safari 17.2+, WebView2, recent
+  WebKitGTK).
 
 ## 6. Security model
 
