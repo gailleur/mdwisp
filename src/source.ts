@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur. All rights reserved.
+// Copyright (c) 2026 Gailleur Labs. All rights reserved.
 
 // Source (plain Markdown) editing on CodeMirror 6.
 

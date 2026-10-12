@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur. All rights reserved.
+// Copyright (c) 2026 Gailleur Labs. All rights reserved.
 
 //! Native shell for mdwisp.
 //!
@@ -283,7 +283,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         let about = AboutMetadataBuilder::new()
             .name(Some("mdwisp"))
             .version(Some(env!("CARGO_PKG_VERSION")))
-            .copyright(Some("© 2026 Gailleur"))
+            .copyright(Some("© 2026 Gailleur Labs"))
             .build();
         let app_menu = SubmenuBuilder::new(app, "mdwisp")
             .about(Some(about))

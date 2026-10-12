@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur. All rights reserved.
+// Copyright (c) 2026 Gailleur Labs. All rights reserved.
 
 // WYSIWYG editing on top of Milkdown (ProseMirror). The editor owns a
 // ProseMirror document; Markdown is produced only on demand. A document that

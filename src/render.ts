@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur. All rights reserved.
+// Copyright (c) 2026 Gailleur Labs. All rights reserved.
 
 import rehypeRaw from "rehype-raw";
 import rehypeStringify from "rehype-stringify";

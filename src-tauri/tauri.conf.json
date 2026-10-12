@@ -36,7 +36,7 @@
     "active": true,
     "targets": "all",
     "category": "Productivity",
-    "copyright": "© 2026 Gailleur",
+    "copyright": "© 2026 Gailleur Labs",
     "shortDescription": "Minimalist, privacy-first Markdown editor",
     "longDescription": "mdwisp is a minimalist, cross-platform Markdown viewer and editor focused on security, privacy and a tiny footprint. It never makes a network request.",
     "icon": [

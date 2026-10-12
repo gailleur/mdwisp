@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur. All rights reserved.
+// Copyright (c) 2026 Gailleur Labs. All rights reserved.
 
 import { denormalise, normalise, untitledName, type TextBaseline } from "./document";
 import type { WysiwygEditor } from "./editor";
