@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur Labs. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Gailleur Labs
 
 //! Native shell for mdwisp.
 //!
@@ -314,15 +314,26 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&zoom_reset)
         .build()?;
 
+    // Help: an in-app, offline panel. No links to the web and no "check for
+    // updates"; the About box is the platform's own.
+    let about = AboutMetadataBuilder::new()
+        .name(Some("mdwisp"))
+        .version(Some(env!("CARGO_PKG_VERSION")))
+        .copyright(Some("© 2026 Gailleur Labs"))
+        .license(Some("Apache-2.0"))
+        .build();
+    let help_item = MenuItemBuilder::with_id("help", "mdwisp Help")
+        .accelerator("CmdOrCtrl+/")
+        .build(app)?;
+    let help = SubmenuBuilder::new(app, "Help").item(&help_item);
+    #[cfg(not(target_os = "macos"))]
+    let help = help.separator().about(Some(about.clone()));
+    let help = help.build()?;
+
     let mut menu = MenuBuilder::new(app);
 
     #[cfg(target_os = "macos")]
     {
-        let about = AboutMetadataBuilder::new()
-            .name(Some("mdwisp"))
-            .version(Some(env!("CARGO_PKG_VERSION")))
-            .copyright(Some("© 2026 Gailleur Labs"))
-            .build();
         let app_menu = SubmenuBuilder::new(app, "mdwisp")
             .about(Some(about))
             .separator()
@@ -337,8 +348,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         menu = menu.item(&app_menu);
     }
 
-    let menu = menu.items(&[&file, &edit, &format, &view]).build()?;
+    let menu = menu.items(&[&file, &edit, &format, &view, &help]).build()?;
     app.set_menu(menu)?;
+    #[cfg(target_os = "macos")]
+    help.set_as_help_menu_for_nsapp()?;
     Ok(())
 }
 

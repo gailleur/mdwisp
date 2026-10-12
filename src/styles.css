@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: LicenseRef-Proprietary
-   Copyright (c) 2026 Gailleur Labs. All rights reserved. */
+/* SPDX-License-Identifier: Apache-2.0
+   Copyright (c) 2026 Gailleur Labs */
 
 /* Tokens ---------------------------------------------------------------
    Dark follows the Gailleur Labs palette; light is its paper counterpart. */
@@ -492,6 +492,103 @@ html.is-mac .bar {
 
 .prompt__input:focus {
   border-bottom-color: var(--accent);
+}
+
+/* Help panel -------------------------------------------------------------- */
+
+.help {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.45);
+}
+
+.help__panel {
+  width: min(600px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  padding: 18px 24px 22px;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--elevated);
+  color: var(--fg);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.35);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.help__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.help__title {
+  color: var(--accent);
+  font: 12px var(--mono);
+}
+
+.help__close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.help__close:hover,
+.help__close:focus-visible {
+  color: var(--strong);
+  outline: none;
+}
+
+.help__section {
+  margin-top: 16px;
+}
+
+.help__section h3 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font: 10.5px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.help__rows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 16px;
+  margin: 0;
+}
+
+.help__rows dt,
+.help__rows dd {
+  margin: 0;
+}
+
+.help__rows kbd {
+  color: var(--strong);
+  font: 11px var(--mono);
+  white-space: nowrap;
+}
+
+.help__notes {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+
+.help__notes li {
+  margin: 2px 0;
+}
+
+.help__foot {
+  margin: 20px 0 0;
+  color: var(--muted);
+  font: 11px var(--mono);
 }
 
 /* Document ---------------------------------------------------------------- */

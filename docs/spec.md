@@ -73,6 +73,10 @@ does, not how any other product does it. All implementation is original.
   dialog on every platform (phase 4 may add a direct exporter).
 - Reload on demand (Cmd/Ctrl+R) in addition to live reload.
 
+- Help: a native **Help** menu (Cmd/Ctrl+/) opens an in-app, offline panel
+  listing every shortcut, the editing commands and the known limits (for
+  example that math and Mermaid are edited as text). It links nowhere.
+
 ## 5. Editing
 
 - Three modes per tab: reading (rendered), editor (WYSIWYG, ProseMirror via

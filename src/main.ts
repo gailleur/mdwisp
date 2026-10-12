@@ -1,11 +1,12 @@
-// SPDX-License-Identifier: LicenseRef-Proprietary
-// Copyright (c) 2026 Gailleur Labs. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Gailleur Labs
 
 import "katex/dist/katex.min.css";
 import "./styles.css";
 
 import { FindBar } from "./find";
 import { BLOCK_LABEL, type FormatKind } from "./format";
+import { openHelp, type HelpPanel } from "./help";
 import { Outline } from "./outline";
 import { openBlockPicker, type Picker } from "./picker";
 import { isExternalHref, isMarkdownHref, resolveRelative } from "./render";
@@ -145,7 +146,8 @@ function boot(): void {
   const status = document.getElementById("status");
   if (!strip || !body || !viewer || !empty || !emptyOpen || !emptyNew || !status) throw new Error("Shell markup missing.");
 
-  if (/Mac/i.test(navigator.platform)) document.documentElement.classList.add("is-mac");
+  const isMac = /Mac/i.test(navigator.platform);
+  if (isMac) document.documentElement.classList.add("is-mac");
 
   const theme = new Theme();
   const find = new FindBar(viewer);
@@ -174,6 +176,18 @@ function boot(): void {
   const closePopup = () => {
     picker?.close();
     picker = null;
+  };
+
+  let help: HelpPanel | null = null;
+  const toggleHelp = () => {
+    if (help) {
+      help.close();
+      return;
+    }
+    closePopup();
+    help = openHelp(isMac, () => {
+      help = null;
+    });
   };
 
   const refreshOutline = (tab: Tab | null) => {
@@ -330,6 +344,7 @@ function boot(): void {
     "mode-wysiwyg": () => void tabs.setMode("wysiwyg"),
     "mode-source": () => void tabs.setMode("source"),
     outline: toggleOutline,
+    help: toggleHelp,
     theme: () => theme.cycle(),
     "remote-images": () => {
       allowRemoteImages = !allowRemoteImages;
@@ -436,6 +451,7 @@ function boot(): void {
       key === "=" || key === "+" ? "zoom-in" :
       key === "-" ? "zoom-out" :
       key === "0" ? "zoom-reset" :
+      key === "/" ? "help" :
       null;
     if (!id) return;
     event.preventDefault();
