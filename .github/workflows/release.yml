@@ -45,6 +45,10 @@ jobs:
           - name: Windows
             os: windows-latest
     runs-on: ${{ matrix.os }}
+    env:
+      # The secrets context is not allowed in step conditions, so expose
+      # "are the Apple secrets configured" as a plain job variable.
+      APPLE_SIGNING: ${{ secrets.APPLE_API_KEY_CONTENT != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -66,7 +70,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - name: Apple notarization key
-        if: runner.os == 'macOS' && secrets.APPLE_API_KEY_CONTENT != ''
+        if: runner.os == 'macOS' && env.APPLE_SIGNING == 'true'
         env:
           APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
         run: |
@@ -82,7 +86,7 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       - name: Verify macOS signature and notarization
-        if: runner.os == 'macOS' && env.APPLE_API_KEY_PATH != ''
+        if: runner.os == 'macOS' && env.APPLE_SIGNING == 'true'
         run: |
           app=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
           codesign --verify --strict --verbose=2 "$app"
