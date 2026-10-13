@@ -9,17 +9,28 @@
 //! granting read access only to each document's directory, and it opens the
 //! system print dialog. It never touches the network.
 
+mod about;
 mod pdf;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+#[cfg(not(target_os = "macos"))]
+use tauri::menu::AboutMetadataBuilder;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_fs::FsExt;
 
 const MARKDOWN_EXTENSIONS: [&str; 4] = ["md", "markdown", "mdown", "mkd"];
-const HOMEPAGE: &str = "https://gailleur.com";
+
+/// What the About box shows, on every platform.
+const ABOUT: about::About = about::About {
+    name: "mdwisp",
+    version: env!("CARGO_PKG_VERSION"),
+    copyright: "© 2026 Gailleur Labs",
+    publisher: "Gailleur Labs",
+    homepage: "https://gailleur.com",
+};
 
 /// Files the OS asked us to open before the webview was ready to receive
 /// events. Drained once by the frontend at startup.
@@ -338,33 +349,35 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .build()?;
 
     // Help: an in-app, offline panel; no "check for updates". The About box
-    // is the platform's own. The website is a link the user clicks, opened by
-    // the system browser; the app itself still never touches the network.
-    // macOS ignores `website` in the standard about panel, so the URL goes
-    // in the credits text there.
-    let about = AboutMetadataBuilder::new()
-        .name(Some("mdwisp"))
-        .version(Some(env!("CARGO_PKG_VERSION")))
-        .copyright(Some("© 2026 Gailleur Labs"))
-        .license(Some("Apache-2.0"))
-        .website(Some(HOMEPAGE))
-        .website_label(Some("Gailleur Labs"))
-        .credits(Some("Gailleur Labs · gailleur.com"))
-        .build();
+    // is the platform's own, with "Gailleur Labs" linking to the website.
+    // Clicking it opens the system browser; the app itself never touches
+    // the network. On macOS the panel is raised by about.rs so the link can
+    // be rich text; elsewhere the menu library's About item handles it.
     let help_item = MenuItemBuilder::with_id("help", "mdwisp Help")
         .accelerator("CmdOrCtrl+/")
         .build(app)?;
     let help = SubmenuBuilder::new(app, "Help").item(&help_item);
     #[cfg(not(target_os = "macos"))]
-    let help = help.separator().about(Some(about.clone()));
+    let help = {
+        let about = AboutMetadataBuilder::new()
+            .name(Some(ABOUT.name))
+            .version(Some(ABOUT.version))
+            .copyright(Some(ABOUT.copyright))
+            .license(Some("Apache-2.0"))
+            .website(Some(ABOUT.homepage))
+            .website_label(Some(ABOUT.publisher))
+            .build();
+        help.separator().about(Some(about))
+    };
     let help = help.build()?;
 
     let mut menu = MenuBuilder::new(app);
 
     #[cfg(target_os = "macos")]
     {
+        let about_item = MenuItemBuilder::with_id("about", "About mdwisp").build(app)?;
         let app_menu = SubmenuBuilder::new(app, "mdwisp")
-            .about(Some(about))
+            .item(&about_item)
             .separator()
             .services()
             .separator()
@@ -413,6 +426,11 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(|app, event| {
+            #[cfg(target_os = "macos")]
+            if event.id().0 == "about" {
+                let _ = app.run_on_main_thread(|| about::show(&ABOUT));
+                return;
+            }
             let _ = app.emit("menu", event.id().0.clone());
         })
         .build(tauri::generate_context!())
