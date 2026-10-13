@@ -20,15 +20,22 @@ pub fn show(about: &About) {
     use objc2::runtime::AnyObject;
     use objc2::{AnyThread, MainThreadMarker};
     use objc2_app_kit::{
-        NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionCredits,
-        NSApplication, NSLinkAttributeName,
+        NSAboutPanelOptionApplicationIcon, NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion,
+        NSAboutPanelOptionCredits, NSApplication, NSImage, NSLinkAttributeName,
     };
-    use objc2_foundation::{ns_string, NSAttributedString, NSDictionary, NSString, NSURL};
+    use objc2_foundation::{ns_string, NSAttributedString, NSData, NSDictionary, NSString, NSURL};
+
+    /// The bundle supplies the icon in a packaged app; passing it explicitly
+    /// makes dev builds, which have no bundle, show the same mark.
+    const ICON_PNG: &[u8] = include_bytes!("../icons/128x128@2x.png");
 
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
     let Some(url) = NSURL::URLWithString(&NSString::from_str(about.homepage)) else {
+        return;
+    };
+    let Some(icon) = NSImage::initWithData(NSImage::alloc(), &NSData::with_bytes(ICON_PNG)) else {
         return;
     };
 
@@ -46,9 +53,10 @@ pub fn show(about: &About) {
         let name = NSString::from_str(about.name);
         let version = NSString::from_str(about.version);
         let copyright = NSString::from_str(about.copyright);
-        let values: [&AnyObject; 4] = [&name, &version, &copyright, &credits];
+        let values: [&AnyObject; 5] = [&icon, &name, &version, &copyright, &credits];
         let options = NSDictionary::from_slices::<NSString>(
             &[
+                NSAboutPanelOptionApplicationIcon,
                 NSAboutPanelOptionApplicationName,
                 NSAboutPanelOptionApplicationVersion,
                 // AppKit reads this undocumented key for the copyright line;

@@ -55,7 +55,9 @@ tooltip, and ignores images and code.
   120 ms colour transition, and `prefers-reduced-motion` disables that.
 - Errors are red-edged toasts that stay until dismissed or 10 s; status
   toasts are green-edged and brief. Messages are lowercase mono, like logs.
-- The icon is the "wisp": a squared `m` whose last stroke dissolves into
-  pixels, drawn in the same stroke and node language as the Gailleur Labs
-  mark. `src-tauri/icons/source.svg` is the source; `pnpm tauri icon`
-  regenerates the platform icons.
+- The icon is a squared `md` drawn in the same stroke, grid and corner-node
+  language as the Gailleur Labs mark; the ascender of the `d` rises and
+  dissolves into pixels, the "wisp". `src-tauri/icons/source.svg` is the
+  source; `pnpm tauri icon src-tauri/icons/source.svg` regenerates the
+  platform icons. The macOS About panel embeds `icons/128x128@2x.png` so
+  the panel shows it in dev builds too, where there is no bundle.

@@ -32,8 +32,8 @@ tauri-plugin-single-instance = "2"
 # the same crates and versions Tauri itself links; nothing new is pulled in.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSDictionary", "NSGeometry", "NSObject", "NSAttributedString"] }
-objc2-app-kit = { version = "0.3", features = ["NSPrintInfo", "NSPrintOperation", "NSView", "NSResponder", "NSWindow", "NSApplication", "NSAttributedString"] }
+objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSData", "NSDictionary", "NSGeometry", "NSObject", "NSAttributedString"] }
+objc2-app-kit = { version = "0.3", features = ["NSPrintInfo", "NSPrintOperation", "NSView", "NSResponder", "NSWindow", "NSApplication", "NSAttributedString", "NSImage"] }
 objc2-web-kit = { version = "0.3", features = ["WKWebView", "objc2-app-kit"] }
 
 [target.'cfg(windows)'.dependencies]
