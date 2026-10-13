@@ -52,8 +52,12 @@ WebView2 and WebKitGTK complete asynchronously on the main thread.
 Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`: it checks the
 tag against the three version fields, builds installers on macOS, Linux and
 Windows, writes `SHA256SUMS`, and opens a *draft* GitHub release holding all
-of them. Publishing the draft is manual. Builds are unsigned until signing
-credentials are configured; the README explains how to open them.
+of them. Publishing the draft is manual. The macOS build is signed with the
+Developer ID certificate and notarized by Apple from the `APPLE_*`
+repository secrets; Tauri does the signing, submission and stapling itself,
+and the workflow re-checks the result with `codesign`, `spctl` and
+`stapler`. Forks without the secrets get an unsigned build. Windows builds
+are unsigned; the README explains how to open them.
 
 ## Frontend modules
 

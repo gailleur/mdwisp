@@ -31,11 +31,11 @@ pnpm tauri build        # produce a platform installer in src-tauri/target
 Installers for each release are attached to the GitHub release with a
 `SHA256SUMS` file; check a download with `sha256sum -c SHA256SUMS`.
 
-The builds are not yet code-signed, so each platform warns on first launch:
-
-- **macOS**: right-click the app and choose *Open* once, or run
-  `xattr -d com.apple.quarantine /Applications/mdwisp.app`.
-- **Windows**: in the SmartScreen dialog choose *More info* → *Run anyway*.
+- **macOS**: the app is signed with a Developer ID certificate and
+  notarized by Apple, so it opens like any other download. Drag it from
+  the disk image to Applications.
+- **Windows**: builds are not yet code-signed, so in the SmartScreen
+  dialog choose *More info* → *Run anyway*.
   The installer fetches Microsoft's WebView2 runtime only if the machine
   lacks it (every supported Windows 10/11 ships with it). That is the one
   network action in the whole project, and it is the installer's, not the
