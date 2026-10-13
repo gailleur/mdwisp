@@ -93,7 +93,17 @@ export interface HelpPanel {
   close(): void;
 }
 
-export function openHelp(isMac: boolean, onClose?: () => void): HelpPanel {
+export const HOMEPAGE = "https://gailleur.com";
+export const REPOSITORY = "https://github.com/gailleur/mdwisp";
+
+export interface HelpOptions {
+  onClose?: () => void;
+  /** Opens a URL in the system browser. The panel never navigates itself. */
+  openLink?: (url: string) => void;
+}
+
+export function openHelp(isMac: boolean, options: HelpOptions = {}): HelpPanel {
+  const { onClose, openLink } = options;
   const element = document.createElement("div");
   element.className = "help";
   element.setAttribute("role", "dialog");
@@ -149,9 +159,25 @@ export function openHelp(isMac: boolean, onClose?: () => void): HelpPanel {
     panel.appendChild(block);
   }
 
+  // Footer links hand the URL to the shell, which opens the system browser.
   const foot = document.createElement("p");
   foot.className = "help__foot";
-  foot.textContent = "© 2026 Gailleur Labs · Apache License 2.0 · github.com/gailleur/mdwisp";
+  const link = (label: string, url: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.textContent = label;
+    a.addEventListener("click", (event) => {
+      event.preventDefault();
+      openLink?.(url);
+    });
+    return a;
+  };
+  foot.append(
+    "© 2026 ",
+    link("Gailleur Labs", HOMEPAGE),
+    " · Apache License 2.0 · ",
+    link("github.com/gailleur/mdwisp", REPOSITORY),
+  );
   panel.appendChild(foot);
   element.appendChild(panel);
 

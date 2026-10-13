@@ -3,7 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { helpSections, keysFor, openHelp } from "./help";
+import { HOMEPAGE, REPOSITORY, helpSections, keysFor, openHelp } from "./help";
 
 describe("keysFor", () => {
   it("keeps Mac glyphs on Mac and spells them out elsewhere", () => {
@@ -42,18 +42,30 @@ describe("openHelp", () => {
 
   it("closes on Escape, on the close button and on the backdrop, once", () => {
     const onClose = vi.fn();
-    const a = openHelp(false, onClose);
+    const a = openHelp(false, { onClose });
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(document.body.contains(a.element)).toBe(false);
 
-    const b = openHelp(false, onClose);
+    const b = openHelp(false, { onClose });
     b.element.querySelector<HTMLButtonElement>(".help__close")!.click();
     expect(document.body.contains(b.element)).toBe(false);
 
-    const c = openHelp(false, onClose);
+    const c = openHelp(false, { onClose });
     c.element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     expect(document.body.contains(c.element)).toBe(false);
     c.close();
     expect(onClose).toHaveBeenCalledTimes(3);
+  });
+
+  it("hands footer links to the shell instead of navigating", () => {
+    const openLink = vi.fn();
+    const help = openHelp(true, { openLink });
+    const links = Array.from(help.element.querySelectorAll<HTMLAnchorElement>(".help__foot a"));
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([HOMEPAGE, REPOSITORY]);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    links[0]!.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(openLink).toHaveBeenCalledWith(HOMEPAGE);
+    help.close();
   });
 });

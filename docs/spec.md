@@ -78,7 +78,9 @@ does, not how any other product does it. All implementation is original.
 
 - Help: a native **Help** menu (Cmd/Ctrl+/) opens an in-app, offline panel
   listing every shortcut, the editing commands and the known limits (for
-  example that math and Mermaid are edited as text). It links nowhere.
+  example that math and Mermaid are edited as text). Its footer and the
+  platform About box link to gailleur.com and the repository; those open in
+  the system browser on a click and are the only URLs in the app.
 
 ## 5. Editing
 

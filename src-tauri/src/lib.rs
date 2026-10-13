@@ -19,6 +19,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_fs::FsExt;
 
 const MARKDOWN_EXTENSIONS: [&str; 4] = ["md", "markdown", "mdown", "mkd"];
+const HOMEPAGE: &str = "https://gailleur.com";
 
 /// Files the OS asked us to open before the webview was ready to receive
 /// events. Drained once by the frontend at startup.
@@ -336,13 +337,19 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&zoom_reset)
         .build()?;
 
-    // Help: an in-app, offline panel. No links to the web and no "check for
-    // updates"; the About box is the platform's own.
+    // Help: an in-app, offline panel; no "check for updates". The About box
+    // is the platform's own. The website is a link the user clicks, opened by
+    // the system browser; the app itself still never touches the network.
+    // macOS ignores `website` in the standard about panel, so the URL goes
+    // in the credits text there.
     let about = AboutMetadataBuilder::new()
         .name(Some("mdwisp"))
         .version(Some(env!("CARGO_PKG_VERSION")))
         .copyright(Some("© 2026 Gailleur Labs"))
         .license(Some("Apache-2.0"))
+        .website(Some(HOMEPAGE))
+        .website_label(Some("Gailleur Labs"))
+        .credits(Some("Gailleur Labs · gailleur.com"))
         .build();
     let help_item = MenuItemBuilder::with_id("help", "mdwisp Help")
         .accelerator("CmdOrCtrl+/")

@@ -185,8 +185,13 @@ function boot(): void {
       return;
     }
     closePopup();
-    help = openHelp(isMac, () => {
-      help = null;
+    help = openHelp(isMac, {
+      onClose: () => {
+        help = null;
+      },
+      openLink: (url) => {
+        void shell.openExternal(url).catch((error: unknown) => reportError(String(error)));
+      },
     });
   };
 

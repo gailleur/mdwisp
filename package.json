@@ -4,6 +4,8 @@
   "private": true,
   "description": "Minimalist, privacy-first, cross-platform Markdown editor",
   "license": "Apache-2.0",
+  "homepage": "https://gailleur.com",
+  "repository": "github:gailleur/mdwisp",
   "type": "module",
   "scripts": {
     "dev": "vite",

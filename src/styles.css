@@ -591,6 +591,16 @@ html.is-mac .bar {
   font: 11px var(--mono);
 }
 
+.help__foot a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.help__foot a:hover {
+  color: var(--accent);
+}
+
 /* Document ---------------------------------------------------------------- */
 
 .document {
