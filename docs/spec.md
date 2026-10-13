@@ -81,6 +81,13 @@ does, not how any other product does it. All implementation is original.
   example that math and Mermaid are edited as text). Its footer and the
   platform About box link to gailleur.com and the repository; those open in
   the system browser on a click and are the only URLs in the app.
+- Default app: every installer registers mdwisp for `.md`, `.markdown`,
+  `.mdown` and `.mkd`. The first launch shows a one-line banner offering to
+  make mdwisp the default; **File ▸ Use mdwisp for .md Files** does the same
+  later. The default is never changed without that explicit choice. macOS
+  confirms through its own dialog; Windows opens the Default apps settings
+  page; Linux writes `mimeapps.list` (deb and rpm only, since an AppImage
+  is not registered with the desktop).
 
 ## 5. Editing
 

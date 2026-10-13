@@ -64,7 +64,8 @@
       "webviewInstallMode": { "type": "downloadBootstrapper" }
     },
     "linux": {
-      "deb": { "depends": [] },
+      "deb": { "depends": [], "desktopTemplate": "linux/mdwisp.desktop" },
+      "rpm": { "desktopTemplate": "linux/mdwisp.desktop" },
       "appimage": { "bundleMediaFramework": false }
     }
   },

@@ -942,6 +942,16 @@ html.is-mac .bar {
   color: var(--strong);
 }
 
+/* App-level banner: sits between the tab bar and the document area. */
+.banner--app {
+  position: static;
+  flex: none;
+}
+
+.banner--app[hidden] {
+  display: none;
+}
+
 .toast {
   position: fixed;
   left: 50%;

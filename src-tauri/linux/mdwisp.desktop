@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=mdwisp
+Comment=Minimalist, privacy-first Markdown editor
+Exec=mdwisp %F
+Icon=mdwisp
+Terminal=false
+Categories=Office;
+MimeType=text/markdown;
+StartupWMClass=mdwisp

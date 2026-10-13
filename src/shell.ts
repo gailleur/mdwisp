@@ -116,3 +116,13 @@ export function assetUrl(path: string): string {
 export function openExternal(url: string): Promise<void> {
   return openUrl(url);
 }
+
+/** `true` if mdwisp already opens Markdown files; `null` where unknown. */
+export function defaultMarkdownAppStatus(): Promise<boolean | null> {
+  return invoke<boolean | null>("default_app_status");
+}
+
+/** Makes mdwisp the default Markdown app; resolves to a message to show. */
+export function makeDefaultMarkdownApp(): Promise<string> {
+  return invoke<string>("make_default_app");
+}

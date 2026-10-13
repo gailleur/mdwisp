@@ -42,6 +42,13 @@ The builds are not yet code-signed, so each platform warns on first launch:
   app's.
 - **Linux**: `chmod +x` the AppImage, or install the `.deb`.
 
+Every installer registers mdwisp as an application for `.md` files. Which
+app is the *default* stays your choice: the first launch offers to make it
+mdwisp, and *File ▸ Use mdwisp for .md Files* does the same later. On
+Windows that opens the Default apps settings page, where you pick mdwisp
+for `.md`; on Linux it needs the `.deb` or `.rpm`, since an AppImage is not
+registered with the desktop.
+
 ## Contributing and security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as

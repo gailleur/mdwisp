@@ -10,10 +10,12 @@
 //! system print dialog. It never touches the network.
 
 mod about;
+mod defaults;
 mod pdf;
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{mpsc, Mutex};
+use std::time::Duration;
 
 #[cfg(not(target_os = "macos"))]
 use tauri::menu::AboutMetadataBuilder;
@@ -206,6 +208,31 @@ async fn export_pdf<R: Runtime>(window: tauri::WebviewWindow<R>, path: String) -
     pdf::export(window, path).await
 }
 
+/// `Some(true)` when mdwisp already opens Markdown files, `None` where the
+/// platform offers no way to read that.
+#[tauri::command]
+fn default_app_status<R: Runtime>(app: AppHandle<R>) -> Option<bool> {
+    defaults::is_default(&app.config().identifier)
+}
+
+/// Makes mdwisp the default Markdown app, or opens the system page where
+/// the user can. Only ever called from an explicit user action. macOS
+/// answers through a consent dialog, so the result arrives over a channel.
+#[tauri::command]
+async fn make_default_app<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
+    let bundle_id = app.config().identifier.clone();
+    let (tx, rx) = mpsc::channel::<defaults::Reply>();
+    app.run_on_main_thread(move || defaults::make_default(&bundle_id, tx))
+        .map_err(|e| e.to_string())?;
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        rx.recv_timeout(Duration::from_secs(600))
+            .map_err(|_| "The system did not answer.".to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(outcome.message().to_string())
+}
+
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let new_doc = MenuItemBuilder::with_id("new", "New")
         .accelerator("CmdOrCtrl+N")
@@ -232,10 +259,12 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
+    let default_app = MenuItemBuilder::with_id("default-app", "Use mdwisp for .md Files").build(app)?;
 
     let mut file = SubmenuBuilder::new(app, "File")
         .item(&new_doc)
         .item(&open)
+        .item(&default_app)
         .separator()
         .item(&save)
         .item(&save_as)
@@ -418,7 +447,9 @@ pub fn run() {
             save_document,
             take_pending_files,
             print_page,
-            export_pdf
+            export_pdf,
+            default_app_status,
+            make_default_app
         ])
         .setup(|app| {
             build_menu(app.handle())?;

@@ -53,6 +53,61 @@ function reportError(message: string): void {
   toast(message, true);
 }
 
+// A one-line notice above the document area, for app-level questions.
+const appBanner = document.getElementById("app-banner") as HTMLElement;
+
+function showAppBanner(message: string, choices: Array<[label: string, run: () => void]>): void {
+  appBanner.replaceChildren();
+  const text = document.createElement("span");
+  text.textContent = message;
+  appBanner.appendChild(text);
+  for (const [label, run] of choices) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "banner__action";
+    button.textContent = label;
+    button.addEventListener("click", run);
+    appBanner.appendChild(button);
+  }
+  appBanner.hidden = false;
+}
+
+function hideAppBanner(): void {
+  appBanner.hidden = true;
+  appBanner.replaceChildren();
+}
+
+// Default Markdown app. The installers register the association; being the
+// default is the user's call, so it is offered once and never assumed.
+const DEFAULT_APP_OFFERED = "mdwisp.defaultAppOffered";
+
+function settleDefaultApp(): void {
+  writeFlag(DEFAULT_APP_OFFERED, true);
+  hideAppBanner();
+}
+
+async function makeDefaultApp(): Promise<void> {
+  try {
+    toast(await shell.makeDefaultMarkdownApp());
+    settleDefaultApp();
+  } catch (error) {
+    reportError(`Could not set the default app: ${String(error)}`);
+  }
+}
+
+async function offerDefaultApp(): Promise<void> {
+  if (readFlag(DEFAULT_APP_OFFERED, false)) return;
+  const status = await shell.defaultMarkdownAppStatus().catch(() => null);
+  if (status === true) {
+    writeFlag(DEFAULT_APP_OFFERED, true);
+    return;
+  }
+  showAppBanner("Open Markdown files with mdwisp by default?", [
+    ["yes", () => void makeDefaultApp()],
+    ["not now", settleDefaultApp],
+  ]);
+}
+
 async function copyText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -366,6 +421,7 @@ function boot(): void {
     "mode-source": () => void tabs.setMode("source"),
     outline: toggleOutline,
     help: toggleHelp,
+    "default-app": () => void makeDefaultApp(),
     theme: () => theme.cycle(),
     "remote-images": () => {
       allowRemoteImages = !allowRemoteImages;
@@ -492,6 +548,7 @@ function boot(): void {
     .then((paths) => tabs.open(paths));
 
   reflect(null);
+  void offerDefaultApp();
 }
 
 function isMarkdownPath(path: string): boolean {
