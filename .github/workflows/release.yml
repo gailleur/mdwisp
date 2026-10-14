@@ -100,6 +100,10 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # When CI=true the bundler skips the Finder step that lays out the
+          # disk image (background, 128 pt icons, hidden extension). The
+          # hosted macOS runners have a Finder session, so run it anyway.
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
       - name: Verify macOS signature and notarization
         if: runner.os == 'macOS' && env.APPLE_SIGNING == 'true'
         env:
