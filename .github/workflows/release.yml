@@ -99,6 +99,18 @@ jobs:
           find src-tauri/target/release/bundle \
             \( -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.msi' -o -name '*-setup.exe' \) \
             -exec cp {} out/ \;
+          # Versionless copies give mdwisp.com stable "latest" download
+          # links. They are byte-identical to the versioned files.
+          for f in out/*; do
+            case "$f" in
+              *.dmg)        cp "$f" out/mdwisp-macos-arm64.dmg ;;
+              *.AppImage)   cp "$f" out/mdwisp-linux-x86_64.AppImage ;;
+              *.deb)        cp "$f" out/mdwisp-linux-amd64.deb ;;
+              *.rpm)        cp "$f" out/mdwisp-linux-x86_64.rpm ;;
+              *-setup.exe)  cp "$f" out/mdwisp-windows-x64-setup.exe ;;
+              *.msi)        cp "$f" out/mdwisp-windows-x64.msi ;;
+            esac
+          done
           ls -l out
       - uses: actions/upload-artifact@v4
         with:

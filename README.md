@@ -11,6 +11,19 @@ privacy, and a tiny footprint.
 
 Runs on macOS, Linux and Windows.
 
+## Download
+
+Installers for the latest release, from the [GitHub releases](https://github.com/gailleur/mdwisp/releases):
+
+| Platform | Download |
+| --- | --- |
+| macOS (Apple silicon) | [mdwisp-macos-arm64.dmg](https://github.com/gailleur/mdwisp/releases/latest/download/mdwisp-macos-arm64.dmg) |
+| Windows (x64) | [setup.exe](https://github.com/gailleur/mdwisp/releases/latest/download/mdwisp-windows-x64-setup.exe) · [msi](https://github.com/gailleur/mdwisp/releases/latest/download/mdwisp-windows-x64.msi) |
+| Linux (x86_64) | [deb](https://github.com/gailleur/mdwisp/releases/latest/download/mdwisp-linux-amd64.deb) · [rpm](https://github.com/gailleur/mdwisp/releases/latest/download/mdwisp-linux-x86_64.rpm) · [AppImage](https://github.com/gailleur/mdwisp/releases/latest/download/mdwisp-linux-x86_64.AppImage) |
+
+The same links are on [mdwisp.com](https://mdwisp.com), a static page served
+from the `site/` folder of this repository.
+
 See [docs/spec.md](docs/spec.md) for the product specification and
 [docs/architecture.md](docs/architecture.md) for how it is built.
 
