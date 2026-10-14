@@ -43,7 +43,7 @@ jobs:
       - name: Install test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb openbox xdotool imagemagick x11-utils
+          sudo apt-get install -y xvfb openbox xdotool imagemagick x11-utils dbus-x11 gdb psmisc
           if [ "${{ matrix.kind }}" = appimage ]; then
             # FUSE mounts the image; libEGL is a system library WebKitGTK
             # links that every desktop install has but a bare runner lacks.

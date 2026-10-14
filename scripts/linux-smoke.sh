@@ -52,6 +52,9 @@ if [ -z "$win" ]; then
   for w in $(xdotool search --name '^mdwisp'); do
     echo "--- unmapped candidate $w"; xwininfo -id "$w" | grep -E 'Map State|geometry|Width|Height'
   done
+  echo "--- process tree"; pstree -p "$app" || true
+  echo "--- threads"; ls "/proc/$app/task" | wc -l
+  echo "--- stacks"; sudo gdb -p "$app" -batch -ex 'thread apply all bt 12' 2>/dev/null | grep -E '^#|^Thread' | head -120
   cat "$out/app.log"; exit 1
 fi
 xdotool windowactivate --sync "$win" || true
