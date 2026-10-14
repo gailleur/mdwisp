@@ -42,7 +42,8 @@ for _ in $(seq 1 30); do
   if ! kill -0 "$app" 2>/dev/null; then
     echo "app exited early"; cat "$out/app.log"; exit 1
   fi
-  win=$(xdotool search --onlyvisible --name '^mdwisp' 2>/dev/null | head -1 || true)
+  # The title is "<document> — mdwisp".
+  win=$(xdotool search --onlyvisible --name 'mdwisp$' 2>/dev/null | head -1 || true)
   [ -n "$win" ] && break
 done
 import -window root "$out/0-startup.png"
