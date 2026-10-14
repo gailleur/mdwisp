@@ -32,9 +32,14 @@ sleep 10
 if ! kill -0 "$app" 2>/dev/null; then
   echo "app exited early"; cat "$out/app.log"; exit 1
 fi
-win=$(xdotool search --onlyvisible --class mdwisp | head -1 || true)
+import -window root "$out/0-startup.png"
+win=$(xdotool search --onlyvisible --name '^mdwisp' | head -1 || true)
 if [ -z "$win" ]; then
-  echo "no window found"; xdotool search --name '' getwindowname %@ || true; cat "$out/app.log"; exit 1
+  echo "no window found"
+  for w in $(xdotool search --onlyvisible --name ''); do
+    echo "$w: $(xdotool getwindowname "$w") $(xprop -id "$w" WM_CLASS 2>/dev/null)"
+  done
+  cat "$out/app.log"; exit 1
 fi
 xdotool windowactivate --sync "$win" || true
 xdotool windowsize "$win" 1200 760 || true
