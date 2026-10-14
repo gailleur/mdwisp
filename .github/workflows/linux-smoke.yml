@@ -1,0 +1,98 @@
+name: Linux smoke test
+
+# Installs the published Linux packages on real Ubuntu runners, opens a
+# document under a virtual display, and runs Help ▸ Check for Updates…
+# against the live endpoint. Screenshots are uploaded as artifacts so a
+# person can look at the result. Run by hand after a release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release to test"
+        default: "v0.1.5"
+      previous:
+        description: "Older release to install first, so the update check finds the newer one"
+        default: "v0.1.4"
+      try_install:
+        description: "Also click install in the update banner"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: ${{ matrix.kind }} on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            kind: deb
+          - os: ubuntu-24.04
+            kind: deb
+          - os: ubuntu-24.04
+            kind: appimage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      - name: Install test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb openbox xdotool imagemagick x11-utils
+          if [ "${{ matrix.kind }}" = appimage ]; then
+            sudo apt-get install -y libfuse2t64 2>/dev/null || sudo apt-get install -y libfuse2
+          fi
+      - name: Download packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "${{ matrix.kind }}" in
+            deb) pattern='mdwisp-linux-amd64.deb' ;;
+            appimage) pattern='mdwisp-linux-x86_64.AppImage' ;;
+          esac
+          gh release download "${{ inputs.previous }}" -R "$GITHUB_REPOSITORY" -p "$pattern" -D prev
+          gh release download "${{ inputs.tag }}" -R "$GITHUB_REPOSITORY" -p "$pattern" -D new
+          ls -la prev new
+      - name: Install the older release
+        run: |
+          if [ "${{ matrix.kind }}" = deb ]; then
+            sudo apt-get install -y ./prev/*.deb
+            dpkg -s mdwisp | grep -E '^(Version|Depends)'
+            echo "BIN=/usr/bin/mdwisp" >> "$GITHUB_ENV"
+          else
+            chmod +x prev/*.AppImage
+            echo "BIN=$PWD/prev/mdwisp-linux-x86_64.AppImage" >> "$GITHUB_ENV"
+          fi
+          "$BIN" --version 2>/dev/null || true
+      - name: Open a document and check for updates
+        env:
+          TRY_INSTALL: ${{ inputs.try_install && '1' || '' }}
+        run: |
+          cat > sample.md <<'EOF'
+          # Smoke test
+
+          A paragraph with **bold**, *italic* and `code`.
+
+          - one
+          - two
+
+          | a | b |
+          |---|---|
+          | 1 | 2 |
+          EOF
+          chmod +x scripts/linux-smoke.sh
+          xvfb-run -a -s "-screen 0 1280x800x24" scripts/linux-smoke.sh "$BIN" "$PWD/sample.md" shots
+      - name: Report installed version afterwards
+        if: always()
+        run: |
+          if [ "${{ matrix.kind }}" = deb ]; then dpkg -s mdwisp | grep '^Version' || true; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots-${{ matrix.kind }}-${{ matrix.os }}
+          path: shots
