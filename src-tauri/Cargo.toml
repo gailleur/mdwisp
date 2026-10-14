@@ -1,6 +1,6 @@
 [package]
 name = "mdwisp"
-version = "0.1.2"
+version = "0.1.3"
 description = "Minimalist, privacy-first, cross-platform Markdown editor"
 authors = ["Gailleur Labs"]
 license = "Apache-2.0"
