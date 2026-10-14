@@ -67,8 +67,11 @@ import -window root "$out/1-document.png"
 # Help menu: the webview owns keyboard focus, so open the menu with the
 # mouse (menubar sits just below the client area's top edge), then walk
 # the items: Down selects "mdwisp Help", Down again "Check for Updates…".
-eval "$(xdotool getwindowgeometry --shell "$win")"
-xdotool mousemove $((X + 213)) $((Y + 13)) click 1
+xdotool getwindowgeometry "$win"
+xdotool windowmove "$win" 0 0
+sleep 1
+# Openbox puts the frame at the origin: title bar 0–18, menubar around y=32.
+xdotool mousemove 213 32 click 1
 sleep 1
 xdotool key Down
 sleep 0.3
