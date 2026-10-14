@@ -5,12 +5,12 @@ name: App Store
 # tab for a given tag; submitting for review stays a manual step on
 # appstoreconnect.apple.com.
 #
-# Secrets: APPSTORE_CERTIFICATES (base64 .p12 holding the "Apple
-# Distribution" and "3rd Party Mac Developer Installer" identities),
-# APPSTORE_CERTIFICATES_PASSWORD, APPSTORE_APP_IDENTITY, APPSTORE_INSTALLER_IDENTITY,
-# APPSTORE_PROVISIONING_PROFILE (base64 .provisionprofile), and the
-# APPLE_API_KEY / APPLE_API_ISSUER / APPLE_API_KEY_CONTENT trio shared with
-# release.yml for the upload.
+# Secrets: APPSTORE_DIST_P12 and APPSTORE_INSTALLER_P12 (base64 .p12 files
+# holding the "Apple Distribution" and "3rd Party Mac Developer Installer"
+# identities, both protected by APPSTORE_P12_PASSWORD), APPSTORE_APP_IDENTITY,
+# APPSTORE_INSTALLER_IDENTITY, APPSTORE_PROVISIONING_PROFILE (base64
+# .provisionprofile), and the APPLE_API_KEY / APPLE_API_ISSUER /
+# APPLE_API_KEY_CONTENT trio shared with release.yml for the upload.
 
 on:
   workflow_dispatch:
@@ -55,13 +55,33 @@ jobs:
           printf '%s\n' "$APPLE_API_KEY_CONTENT" > "$key"
           chmod 600 "$key"
           echo "APPLE_API_KEY_PATH=$key" >> "$GITHUB_ENV"
-      - name: Build sandboxed universal app
-        # Tauri imports the certificates from APPLE_CERTIFICATE and signs
-        # with APPLE_SIGNING_IDENTITY. No notarization variables are set
-        # here on purpose: App Store builds are not notarized.
+      - name: Signing identities
+        # A throwaway keychain holding both identities, so that Tauri
+        # (codesign) and productbuild find them by name.
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPSTORE_CERTIFICATES }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          APPSTORE_DIST_P12: ${{ secrets.APPSTORE_DIST_P12 }}
+          APPSTORE_INSTALLER_P12: ${{ secrets.APPSTORE_INSTALLER_P12 }}
+          APPSTORE_P12_PASSWORD: ${{ secrets.APPSTORE_P12_PASSWORD }}
+        run: |
+          kc="$RUNNER_TEMP/appstore.keychain-db"
+          kcpw=$(uuidgen)
+          security create-keychain -p "$kcpw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpw" "$kc"
+          for name in DIST INSTALLER; do
+            eval "printf '%s' \"\$APPSTORE_${name}_P12\"" | base64 --decode > "$RUNNER_TEMP/$name.p12"
+            security import "$RUNNER_TEMP/$name.p12" -k "$kc" -P "$APPSTORE_P12_PASSWORD" \
+              -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/security
+            rm "$RUNNER_TEMP/$name.p12"
+          done
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$kc"
+      - name: Build sandboxed universal app
+        # Tauri signs with APPLE_SIGNING_IDENTITY from the keychain search
+        # list. No notarization variables are set here on purpose: App
+        # Store builds are not notarized.
+        env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPSTORE_APP_IDENTITY }}
         run: |
           pnpm tauri build --ci --no-bundle --target universal-apple-darwin
