@@ -6,7 +6,7 @@ import "./styles.css";
 
 import { FindBar } from "./find";
 import { BLOCK_LABEL, type FormatKind } from "./format";
-import { openHelp, type HelpPanel } from "./help";
+import { keysFor, openHelp, type HelpPanel } from "./help";
 import { Outline } from "./outline";
 import { openBlockPicker, type Picker } from "./picker";
 import { isExternalHref, isMarkdownHref, resolveRelative } from "./render";
@@ -308,6 +308,10 @@ function boot(): void {
 
   const isMac = /Mac/i.test(navigator.platform);
   if (isMac) document.documentElement.classList.add("is-mac");
+  // The shell markup is written with Mac glyphs; spell them out elsewhere.
+  if (!isMac) {
+    for (const key of document.querySelectorAll("kbd")) key.textContent = keysFor(key.textContent ?? "", false);
+  }
 
   const theme = new Theme();
   const find = new FindBar(viewer);
@@ -321,7 +325,7 @@ function boot(): void {
   // Status bar: outline · mode · block · path · (spacer) · words · eol · theme
   const outlineButton = el("button", "status__button", "☰");
   outlineButton.type = "button";
-  outlineButton.title = "Outline (⌘⌥S)";
+  outlineButton.title = `Outline (${keysFor("⌘⌥S", isMac)})`;
   const modeButton = el("button", "status__button status__button--mode");
   modeButton.type = "button";
   const blockButton = el("button", "status__button status__button--block");
@@ -376,7 +380,7 @@ function boot(): void {
     outline.setOpen(outlineOpen && tab !== null);
     closePopup();
     if (tab) {
-      modeButton.textContent = `${MODE_LABEL[tab.mode]} ${MODE_KEY[tab.mode]}`;
+      modeButton.textContent = `${MODE_LABEL[tab.mode]} ${keysFor(MODE_KEY[tab.mode], isMac)}`;
       modeButton.title = "Click to cycle reading → editor → source";
       pathItem.textContent = tab.path ? displayPath(tab.path) : "unsaved";
       pathItem.title = tab.path ?? "";
@@ -477,7 +481,7 @@ function boot(): void {
     const tab = tabs.current;
     if (!tab) return;
     if (tab.mode === "view") {
-      toast("switch to the editor (⌘2) or source (⌘3) to format");
+      toast(keysFor("switch to the editor (⌘2) or source (⌘3) to format", isMac));
       return;
     }
     if (kind === "link") {
