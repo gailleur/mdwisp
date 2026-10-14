@@ -1,6 +1,6 @@
 # mdwisp
 
-A minimalist, cross-platform Markdown viewer adnd editor focused on security, 
+A minimalist, cross-platform Markdown viewer and editor focused on security, 
 privacy, and a tiny footprint.
 
 - **Secure** — documents are sanitised before rendering and the webview runs
