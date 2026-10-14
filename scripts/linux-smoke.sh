@@ -89,12 +89,16 @@ fi
 # If an update was offered the banner's first button is "install"; click it
 # and give the installer time. On a .deb this runs the package manager.
 if [ "${TRY_INSTALL:-}" = "1" ]; then
-  eval "$(xdotool getwindowgeometry --shell "$win")"
-  # The banner sits at the top of the window; its buttons follow the text.
-  xdotool mousemove $((X + ${INSTALL_X:-430})) $((Y + ${INSTALL_Y:-24})) click 1
+  # The banner replaces the first-launch one; "install" is its first button.
+  xdotool mousemove 374 100 click 1
+  sleep 20
+  import -window root "$out/4-installing.png"
   sleep 40
-  import -window root "$out/4-after-install.png"
+  import -window root "$out/5-after-install.png"
+  echo "--- mdwisp processes after install (a relaunch has a new pid; original was $app)"
+  pgrep -a mdwisp || true
 fi
 
+pkill -x mdwisp 2>/dev/null || true
 kill "$app" 2>/dev/null || true
 echo "--- app.log"; cat "$out/app.log"

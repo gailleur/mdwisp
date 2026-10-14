@@ -90,10 +90,15 @@ jobs:
           EOF
           chmod +x scripts/linux-smoke.sh
           xvfb-run -a -s "-screen 0 1280x800x24" scripts/linux-smoke.sh "$BIN" "$PWD/sample.md" shots
-      - name: Report installed version afterwards
+      - name: Report what is installed afterwards
         if: always()
         run: |
-          if [ "${{ matrix.kind }}" = deb ]; then dpkg -s mdwisp | grep '^Version' || true; fi
+          if [ "${{ matrix.kind }}" = deb ]; then
+            dpkg -s mdwisp | grep '^Version' || true
+          else
+            # The updater overwrites the running AppImage in place.
+            sha256sum prev/*.AppImage new/*.AppImage
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
