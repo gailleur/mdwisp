@@ -59,6 +59,15 @@ tr.current th::before { content: "▸ "; color: var(--accent); }
 .arch { color: var(--muted); font-size: 0.85rem; margin-left: 6px; }
 .note { color: var(--muted); font-size: 0.9rem; }
 
+.page { padding: 40px 0 56px; max-width: 720px; }
+.page h1 { font-size: 2rem; margin-bottom: 6px; }
+.page h2 { font-size: 1.15rem; color: var(--accent); margin: 32px 0 8px; }
+.page p, .page dd { color: var(--text); margin: 0 0 12px; }
+.page dl { margin: 0; }
+.page dt { font-weight: 600; margin-top: 14px; }
+.page dd { margin-left: 0; color: var(--muted); }
+.page a { text-decoration: underline; text-underline-offset: 3px; }
+
 footer { padding: 24px 20px 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
 footer p { margin: 0 0 6px; }
 footer a { color: var(--text); }

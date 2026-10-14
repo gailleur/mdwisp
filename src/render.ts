@@ -158,7 +158,12 @@ export async function renderDiagrams(root: HTMLElement, theme: "light" | "dark")
     securityLevel: "strict",
     theme: theme === "dark" ? "dark" : "default",
     flowchart: { htmlLabels: false },
-    fontFamily: "inherit",
+    // The SVG is shown as an isolated image, so "inherit" would resolve to
+    // the browser's default serif; name the system font stack instead.
+    fontFamily: 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif',
+    // On a syntax error Mermaid otherwise appends its "bomb" graphic to
+    // document.body, outside the viewer; the figure's own fallback is used.
+    suppressErrorRendering: true,
   });
 
   await Promise.all(
@@ -172,11 +177,16 @@ export async function renderDiagrams(root: HTMLElement, theme: "light" | "dark")
         img.alt = "Diagram";
         img.decoding = "async";
         img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        // Mermaid's SVG declares width="100%", which would scale a small
+        // diagram up to the column; cap it at its natural width instead.
+        const natural = /viewBox="[-\d.]+ [-\d.]+ ([\d.]+) /.exec(svg)?.[1];
+        if (natural) img.style.maxWidth = `${Math.ceil(Number(natural))}px`;
         figure.classList.remove("diagram--error");
         figure.replaceChildren(img);
-      } catch {
+      } catch (error) {
         if (generation !== diagramGeneration) return;
-        setDiagramFallback(figure, source, "Could not render diagram.");
+        const reason = (error instanceof Error ? error.message : String(error)).split("\n")[0] ?? "";
+        setDiagramFallback(figure, source, reason ? `Could not render diagram: ${reason.slice(0, 200)}` : "Could not render diagram.");
       }
     }),
   );

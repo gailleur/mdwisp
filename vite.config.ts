@@ -1,30 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Gailleur Labs
 
-import { fileURLToPath } from "node:url";
-
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
-/**
- * Mermaid lazily imports an ELK layout chunk that no default diagram uses.
- * Point that import at a small stub so the 1.4 MB chunk is never bundled.
- */
-function dropMermaidElk(): Plugin {
-  const stub = fileURLToPath(new URL("./src/stubs/elk.ts", import.meta.url));
-  return {
-    name: "mdwisp:drop-mermaid-elk",
-    enforce: "pre",
-    resolveId(source, importer) {
-      if (importer?.includes("/mermaid/") && /\/elk-[A-Z0-9]+\.mjs$/.test(source)) return stub;
-      return null;
-    },
-  };
-}
+// Mermaid's ELK layout engine (elkjs, EPL-2.0) stays a separate chunk that
+// is only fetched by diagrams asking for `layout: elk`. An earlier build
+// swapped that chunk for a stub to save 1.4 MB on disk, which broke every
+// flowchart in release builds while dev builds kept working.
 
 export default defineConfig({
-  plugins: [dropMermaidElk()],
   clearScreen: false,
   server: {
     port: 1420,

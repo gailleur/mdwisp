@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mdwisp support</title>
+  <meta name="description" content="Help for mdwisp: shortcuts, common questions, and where to report a problem.">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="canonical" href="https://mdwisp.com/support">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/"><img class="mark" src="/icon-32.png" width="28" height="28" alt=""><span>mdwisp</span></a>
+    <nav>
+      <a href="/privacy">Privacy</a>
+      <a href="https://github.com/gailleur/mdwisp">Source</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <h1>Support</h1>
+
+    <h2>Getting started</h2>
+    <p>Open a Markdown file with <strong>File ▸ Open</strong>, drag it onto the window, or double-click it in your file manager once mdwisp is your default Markdown app. The first launch offers to make it the default; <strong>File ▸ Use mdwisp for .md Files</strong> does the same later.</p>
+    <p>Every document has three views, one keystroke apart: <strong>Reading</strong> (⌘1), <strong>Editor</strong> (⌘2) for visual editing, and <strong>Source</strong> (⌘3) for the raw text. On Linux and Windows use Ctrl in place of ⌘.</p>
+    <p>The full list of shortcuts and editing commands is in the app under <strong>Help ▸ mdwisp Help</strong> (⌘/). It works offline, like everything else.</p>
+
+    <h2>Common questions</h2>
+    <dl>
+      <dt>Images beside my document do not show (Mac App Store version).</dt>
+      <dd>The App Store version runs in Apple's sandbox, which lets it read only the files you open. When a document uses images from its folder, a banner offers to grant that folder; choose <em>allow</em> and pick the folder. The grant is remembered. The version downloaded from mdwisp.com does not need this.</dd>
+      <dt>Images from the web do not show.</dt>
+      <dd>They are off by default so the app never contacts anyone without asking. Turn them on per session with <strong>View ▸ Toggle Remote Images</strong>.</dd>
+      <dt>The file changed while I was editing.</dt>
+      <dd>mdwisp follows the file on disk. If you had unsaved edits, a banner lets you keep yours or take the disk copy. Nothing is overwritten without that choice.</dd>
+      <dt>Where are my settings?</dt>
+      <dd>On your own machine only: window position, theme, zoom and the outline state. There is no account and nothing to sync.</dd>
+      <dt>Does it update itself?</dt>
+      <dd>No. The app never checks for updates. New versions are announced on the <a href="https://github.com/gailleur/mdwisp/releases">releases page</a>, and the Mac App Store updates its copy the way it updates any app.</dd>
+    </dl>
+
+    <h2>Reporting a problem</h2>
+    <p>Please <a href="https://github.com/gailleur/mdwisp/issues">open an issue</a> on GitHub with your platform, the app version from the About box, and what you expected to happen. A small Markdown file that reproduces the problem helps most. Security concerns go to the address in the repository's <a href="https://github.com/gailleur/mdwisp/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+
+    <p>See also the <a href="/privacy">privacy policy</a>.</p>
+  </main>
+
+  <footer>
+    <p>© 2026 <a href="https://gailleur.com">Gailleur Labs</a> · <a href="https://github.com/gailleur/mdwisp">github.com/gailleur/mdwisp</a> · Apache License 2.0</p>
+  </footer>
+</body>
+</html>
