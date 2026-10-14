@@ -25,19 +25,32 @@ sleep 1
 export WEBKIT_DISABLE_COMPOSITING_MODE=1
 export WEBKIT_DISABLE_DMABUF_RENDERER=1
 
+# A session bus, as on any desktop: the single-instance plugin registers on
+# it and WebKitGTK looks for the accessibility bus there.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  eval "$(dbus-launch --sh-syntax)"
+  export DBUS_SESSION_BUS_ADDRESS
+fi
+
 "$bin" "$doc" >"$out/app.log" 2>&1 &
 app=$!
-sleep 10
 
-if ! kill -0 "$app" 2>/dev/null; then
-  echo "app exited early"; cat "$out/app.log"; exit 1
-fi
+# Wait up to a minute for a mapped window; the runners are slow.
+win=""
+for _ in $(seq 1 30); do
+  sleep 2
+  if ! kill -0 "$app" 2>/dev/null; then
+    echo "app exited early"; cat "$out/app.log"; exit 1
+  fi
+  win=$(xdotool search --onlyvisible --name '^mdwisp' 2>/dev/null | head -1 || true)
+  [ -n "$win" ] && break
+done
 import -window root "$out/0-startup.png"
-win=$(xdotool search --onlyvisible --name '^mdwisp' | head -1 || true)
 if [ -z "$win" ]; then
-  echo "no window found"
-  for w in $(xdotool search --onlyvisible --name ''); do
-    echo "$w: $(xdotool getwindowname "$w") $(xprop -id "$w" WM_CLASS 2>/dev/null)"
+  echo "no mapped window after 60 s; window tree:"
+  xwininfo -root -tree | head -40
+  for w in $(xdotool search --name '^mdwisp'); do
+    echo "--- unmapped candidate $w"; xwininfo -id "$w" | grep -E 'Map State|geometry|Width|Height'
   done
   cat "$out/app.log"; exit 1
 fi
