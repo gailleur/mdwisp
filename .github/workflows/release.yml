@@ -87,11 +87,21 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       - name: Verify macOS signature and notarization
         if: runner.os == 'macOS' && env.APPLE_SIGNING == 'true'
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           app=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
           codesign --verify --strict --verbose=2 "$app"
           spctl --assess --type execute --verbose=2 "$app"
           xcrun stapler validate "$app"
+          # Tauri notarizes and staples the app but only signs the disk
+          # image; notarize that too so the dmg itself passes Gatekeeper.
+          dmg=$(find src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -1)
+          xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "$dmg"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
       - name: Collect installers
         shell: bash
         run: |
