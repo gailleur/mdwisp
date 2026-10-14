@@ -7,12 +7,14 @@
 //! from the OS (double-click, drag onto the icon, command line, second
 //! launch) to the webview, it reads documents on the webview's behalf while
 //! granting read access only to each document's directory, and it opens the
-//! system print dialog. It never touches the network.
+//! system print dialog. It touches the network in exactly one case: when
+//! the user asks it to check for a new version (update.rs).
 
 mod about;
 mod defaults;
 mod pdf;
 mod sandbox;
+mod update;
 
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
@@ -29,11 +31,21 @@ const MARKDOWN_EXTENSIONS: [&str; 4] = ["md", "markdown", "mdown", "mkd"];
 /// What the About box shows, on every platform.
 const ABOUT: about::About = about::About {
     name: "mdwisp",
-    version: env!("CARGO_PKG_VERSION"),
+    released: env!("MDWISP_BUILD_DATE"),
     copyright: "© 2026 Gailleur Labs",
     publisher: "Gailleur Labs",
     homepage: "https://gailleur.com",
 };
+
+/// The About box's update line: the Mac App Store copy points at the
+/// store, every other build at the in-app check.
+fn update_link() -> about::UpdateLink {
+    if sandbox::active() {
+        about::UpdateLink { label: "View in the App Store", url: update::STORE_URL }
+    } else {
+        about::UpdateLink { label: "Check for Updates…", url: about::CHECK_URL }
+    }
+}
 
 /// Files the OS asked us to open before the webview was ready to receive
 /// events. Drained once by the frontend at startup.
@@ -418,20 +430,25 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&zoom_reset)
         .build()?;
 
-    // Help: an in-app, offline panel; no "check for updates". The About box
-    // is the platform's own, with "Gailleur Labs" linking to the website.
-    // Clicking it opens the system browser; the app itself never touches
-    // the network. On macOS the panel is raised by about.rs so the link can
-    // be rich text; elsewhere the menu library's About item handles it.
+    // Help: an in-app, offline panel, and the one network action the app
+    // offers, checking for a new version, which runs only when chosen. The
+    // About box is the platform's own, with "Gailleur Labs" linking to the
+    // website. On macOS the panel is raised by about.rs so the links can be
+    // rich text; elsewhere the menu library's About item handles it.
     let help_item = MenuItemBuilder::with_id("help", "mdwisp Help")
         .accelerator("CmdOrCtrl+/")
         .build(app)?;
-    let help = SubmenuBuilder::new(app, "Help").item(&help_item);
+    let check_updates = MenuItemBuilder::with_id("check-updates", "Check for Updates…").build(app)?;
+    let help = SubmenuBuilder::new(app, "Help")
+        .item(&help_item)
+        .separator()
+        .item(&check_updates);
     #[cfg(not(target_os = "macos"))]
     let help = {
         let about = AboutMetadataBuilder::new()
             .name(Some(ABOUT.name))
-            .version(Some(ABOUT.version))
+            .version(Some(app.package_info().version.to_string()))
+            .comments(Some(format!("Released {}", ABOUT.released)))
             .copyright(Some(ABOUT.copyright))
             .license(Some("Apache-2.0"))
             .website(Some(ABOUT.homepage))
@@ -482,7 +499,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Registered but dormant: it makes a request only inside the two
+        // commands in update.rs, which run on a menu choice and nothing else.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(PendingFiles::default())
+        .manage(update::Found::default())
         .invoke_handler(tauri::generate_handler![
             open_document,
             save_document,
@@ -491,7 +512,9 @@ pub fn run() {
             export_pdf,
             default_app_status,
             make_default_app,
-            remember_folder
+            remember_folder,
+            update::check_update,
+            update::install_update
         ])
         .setup(|app| {
             build_menu(app.handle())?;
@@ -504,7 +527,8 @@ pub fn run() {
         .on_menu_event(|app, event| {
             #[cfg(target_os = "macos")]
             if event.id().0 == "about" {
-                let _ = app.run_on_main_thread(|| about::show(&ABOUT));
+                let version = app.package_info().version.to_string();
+                let _ = app.run_on_main_thread(move || about::show(&ABOUT, &version, &update_link()));
                 return;
             }
             let _ = app.emit("menu", event.id().0.clone());
@@ -513,9 +537,13 @@ pub fn run() {
         .expect("failed to build mdwisp")
         .run(|app, event| {
             // macOS delivers files opened via Finder as an event rather than
-            // command-line arguments.
+            // command-line arguments. The About box's update link arrives
+            // the same way, as the app's own URL scheme.
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Opened { urls } = event {
+                if urls.iter().any(|u| u.as_str() == about::CHECK_URL) {
+                    let _ = app.emit("menu", "check-updates");
+                }
                 let paths = urls
                     .iter()
                     .filter_map(|u| u.to_file_path().ok())

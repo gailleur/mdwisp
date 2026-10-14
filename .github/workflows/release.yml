@@ -8,6 +8,11 @@ name: Release
 # by Apple when the APPLE_* secrets are present; without them the build is
 # unsigned, which is what a fork gets. Tauri reads the variables itself.
 # Windows builds are not signed yet.
+#
+# When TAURI_SIGNING_PRIVATE_KEY is present the build also produces the
+# update bundles and their minisign signatures, and the release gets a
+# latest.json manifest; Help ▸ Check for Updates… in the app reads it via
+# https://mdwisp.com/latest.json. Forks without the key get plain installers.
 
 on:
   push:
@@ -49,6 +54,7 @@ jobs:
       # The secrets context is not allowed in step conditions, so expose
       # "are the Apple secrets configured" as a plain job variable.
       APPLE_SIGNING: ${{ secrets.APPLE_API_KEY_CONTENT != '' }}
+      UPDATER_SIGNING: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -78,13 +84,22 @@ jobs:
           printf '%s\n' "$APPLE_API_KEY_CONTENT" > "$key"
           chmod 600 "$key"
           echo "APPLE_API_KEY_PATH=$key" >> "$GITHUB_ENV"
-      - run: pnpm tauri build --ci
+      - name: Build
+        shell: bash
+        run: |
+          if [ "$UPDATER_SIGNING" = "true" ]; then
+            pnpm tauri build --ci --config src-tauri/tauri.release.conf.json
+          else
+            pnpm tauri build --ci
+          fi
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - name: Verify macOS signature and notarization
         if: runner.os == 'macOS' && env.APPLE_SIGNING == 'true'
         env:
@@ -102,6 +117,14 @@ jobs:
             --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
           xcrun stapler staple "$dmg"
           spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          # The update bundle is the same app, archived; make sure the copy
+          # inside it carries the notarization ticket too.
+          archive=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app.tar.gz' | head -1)
+          if [ -n "$archive" ]; then
+            mkdir -p "$RUNNER_TEMP/archive" && tar -xzf "$archive" -C "$RUNNER_TEMP/archive"
+            codesign --verify --strict "$RUNNER_TEMP/archive"/*.app
+            xcrun stapler validate "$RUNNER_TEMP/archive"/*.app
+          fi
       - name: Collect installers
         shell: bash
         run: |
@@ -109,10 +132,22 @@ jobs:
           find src-tauri/target/release/bundle \
             \( -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.msi' -o -name '*-setup.exe' \) \
             -exec cp {} out/ \;
+          # Update bundles and their signatures, when the build signed them.
+          # Only the macOS one is a separate file (the app archived); the
+          # others are the installers above, so just their signatures move.
+          find src-tauri/target/release/bundle \
+            \( -name '*.AppImage.sig' -o -name '*.deb.sig' -o -name '*.rpm.sig' -o -name '*.msi.sig' -o -name '*-setup.exe.sig' \) \
+            -exec cp {} out/ \;
+          archive=$(find src-tauri/target/release/bundle -maxdepth 2 -name '*.app.tar.gz' | head -1)
+          if [ -n "$archive" ] && [ -f "$archive.sig" ]; then
+            cp "$archive" out/mdwisp-macos-arm64.app.tar.gz
+            cp "$archive.sig" out/mdwisp-macos-arm64.app.tar.gz.sig
+          fi
           # Versionless copies give mdwisp.com stable "latest" download
           # links. They are byte-identical to the versioned files.
           for f in out/*; do
             case "$f" in
+              *.sig)        ;;
               *.dmg)        cp "$f" out/mdwisp-macos-arm64.dmg ;;
               *.AppImage)   cp "$f" out/mdwisp-linux-x86_64.AppImage ;;
               *.deb)        cp "$f" out/mdwisp-linux-amd64.deb ;;
@@ -135,6 +170,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
       - uses: actions/download-artifact@v4
         with:
           pattern: installers-*
@@ -145,6 +183,13 @@ jobs:
           cd out
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
+      - name: Update manifest
+        run: |
+          if ls out/*.sig >/dev/null 2>&1; then
+            bash scripts/latest-manifest.sh "$GITHUB_REF_NAME" out
+          else
+            echo "no update signatures; skipping latest.json"
+          fi
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -153,4 +198,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" out/* \
             --draft --verify-tag \
             --title "mdwisp $GITHUB_REF_NAME" \
-            --notes "Installers for macOS, Linux and Windows. Verify with \`sha256sum -c SHA256SUMS\`. The macOS app is signed and notarized by Apple; Windows builds are not signed yet, see the README for how to open them."
+            --notes "Installers for macOS, Linux and Windows. Verify with \`sha256sum -c SHA256SUMS\`. The macOS app is signed and notarized by Apple; Windows builds are not signed yet, see the README for how to open them. From 0.1.4 on, Help ▸ Check for Updates… in the app installs new releases; the \`.sig\` files and \`latest.json\` are what it verifies against."

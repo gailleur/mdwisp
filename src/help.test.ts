@@ -22,7 +22,8 @@ describe("helpSections", () => {
   it("documents the Mermaid and math limit and the no-network promise", () => {
     const limits = helpSections(true).find((s) => s.title === "limits")?.notes?.join("\n") ?? "";
     expect(limits).toMatch(/Mermaid/);
-    expect(limits).toMatch(/no update checks, no telemetry/);
+    expect(limits).toMatch(/never connects on its own/);
+    expect(limits).toMatch(/Check for Updates/);
   });
 });
 

@@ -5,8 +5,9 @@ privacy, and a tiny footprint.
 
 - **Secure** — documents are sanitised before rendering and the webview runs
   under a strict Content Security Policy. A document cannot run code.
-- **Private** — the app never makes a network request. No update checks, no
-  telemetry, no CDNs. Everything is bundled.
+- **Private** — the app never makes a network request on its own. No
+  telemetry, no CDNs, no automatic update checks; *Help ▸ Check for Updates*
+  connects only when you choose it. Everything is bundled.
 - **Light** — native shell on the system webview. No embedded browser.
 
 Runs on macOS, Linux and Windows.
@@ -54,6 +55,19 @@ Installers for each release are attached to the GitHub release with a
   network action in the whole project, and it is the installer's, not the
   app's.
 - **Linux**: `chmod +x` the AppImage, or install the `.deb`.
+
+### Updating
+
+mdwisp never checks for updates by itself. *Help ▸ Check for Updates…* (or
+the link in the About box) fetches `https://mdwisp.com/latest.json`, a
+redirect to the manifest on the newest GitHub release, and compares it with
+the running version locally. The request carries no version, platform or
+identifier. If a newer release exists, the app offers to download it from
+GitHub, verifies the minisign signature against the public key in
+`src-tauri/tauri.conf.json`, installs it in place and relaunches. The Mac App
+Store copy is updated by the App Store instead. On Linux the `.deb` and
+`.rpm` installs ask for your password through `pkexec`; the AppImage replaces
+itself.
 
 Every installer registers mdwisp as an application for `.md` files. Which
 app is the *default* stays your choice: the first launch offers to make it

@@ -1,6 +1,6 @@
 [package]
 name = "mdwisp"
-version = "0.1.3"
+version = "0.1.4"
 description = "Minimalist, privacy-first, cross-platform Markdown editor"
 authors = ["Gailleur Labs"]
 license = "Apache-2.0"
@@ -24,6 +24,8 @@ tauri-plugin-opener = "2"
 tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tauri-plugin-updater = "2"
+time = { version = "0.3", features = ["formatting"] }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 tauri-plugin-single-instance = "2"
@@ -35,7 +37,7 @@ block2 = "0.6"
 core-foundation = "0.10"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSString", "NSURL", "NSData", "NSDictionary", "NSGeometry", "NSObject", "NSAttributedString", "NSError", "NSArray"] }
-objc2-app-kit = { version = "0.3", features = ["NSPrintInfo", "NSPrintOperation", "NSView", "NSResponder", "NSWindow", "NSApplication", "NSAttributedString", "NSImage", "NSWorkspace", "block2", "objc2-uniform-type-identifiers"] }
+objc2-app-kit = { version = "0.3", features = ["NSPrintInfo", "NSPrintOperation", "NSView", "NSResponder", "NSWindow", "NSApplication", "NSAttributedString", "NSParagraphStyle", "NSText", "NSImage", "NSWorkspace", "block2", "objc2-uniform-type-identifiers"] }
 objc2-uniform-type-identifiers = { version = "0.3", features = ["UTType"] }
 objc2-web-kit = { version = "0.3", features = ["WKWebView", "objc2-app-kit"] }
 

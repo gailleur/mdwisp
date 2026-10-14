@@ -108,6 +108,71 @@ async function offerDefaultApp(): Promise<void> {
   ]);
 }
 
+// Updates, only ever on request. The shell makes the one request; here is
+// the conversation around it. Failure to install is not fatal: the website
+// always has the newest build.
+const DOWNLOAD_PAGE = "https://mdwisp.com/#download";
+let updateBusy = false;
+
+function releaseDay(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+}
+
+async function installUpdate(version: string): Promise<void> {
+  showAppBanner(`Downloading mdwisp ${version}…`, []);
+  const unlisten = await shell.onUpdateProgress(({ downloaded, total }) => {
+    const mb = (n: number) => (n / 1_000_000).toFixed(1);
+    const text = total ? `Downloading mdwisp ${version}… ${mb(downloaded)} of ${mb(total)} MB` : `Downloading mdwisp ${version}… ${mb(downloaded)} MB`;
+    showAppBanner(text, []);
+  });
+  try {
+    await shell.installUpdate();
+    showAppBanner(`Installing mdwisp ${version}… the app will relaunch.`, []);
+  } catch (error) {
+    unlisten();
+    showAppBanner(`Could not install the update: ${String(error)}`, [
+      ["download", () => void shell.openExternal(DOWNLOAD_PAGE)],
+      ["close", hideAppBanner],
+    ]);
+  }
+}
+
+async function checkForUpdates(): Promise<void> {
+  if (updateBusy) return;
+  updateBusy = true;
+  showAppBanner("Checking for updates…", []);
+  try {
+    const result = await shell.checkForUpdates();
+    if (result.kind === "store") {
+      showAppBanner("Updates for this copy come from the Mac App Store.", [
+        ["open the App Store", () => void shell.openExternal(result.url)],
+        ["close", hideAppBanner],
+      ]);
+    } else if (result.kind === "upToDate") {
+      hideAppBanner();
+      toast(`mdwisp ${result.version} is up to date.`);
+    } else {
+      const day = releaseDay(result.date);
+      const notes = result.notes?.split("\n").find((line) => line.trim()) ?? "";
+      showAppBanner(`mdwisp ${result.version} is available${day ? `, released ${day}` : ""}.${notes ? ` ${notes}` : ""}`, [
+        ["install", () => void installUpdate(result.version)],
+        ["release notes", () => void shell.openExternal(`https://github.com/gailleur/mdwisp/releases/tag/v${result.version}`)],
+        ["later", hideAppBanner],
+      ]);
+    }
+  } catch (error) {
+    showAppBanner(`Could not check for updates: ${String(error)}`, [
+      ["download page", () => void shell.openExternal(DOWNLOAD_PAGE)],
+      ["close", hideAppBanner],
+    ]);
+  } finally {
+    updateBusy = false;
+  }
+}
+
 // Folder access (Mac App Store sandbox). A document grants access to itself
 // only; images beside it need the folder, which only the user can grant via
 // the folder dialog. Asked once per folder per session, and only when the
@@ -463,6 +528,7 @@ function boot(): void {
     outline: toggleOutline,
     help: toggleHelp,
     "default-app": () => void makeDefaultApp(),
+    "check-updates": () => void checkForUpdates(),
     theme: () => theme.cycle(),
     "remote-images": () => {
       allowRemoteImages = !allowRemoteImages;

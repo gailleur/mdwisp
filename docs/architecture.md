@@ -75,6 +75,28 @@ app list a granted file's folder but not read the files in it.
 Inside the sandbox a save cannot create the temp file beside the target,
 so `save_document` writes in place there.
 
+### Updates
+
+`src-tauri/src/update.rs` is the one place the app reaches the network on
+its own, and only inside two commands the menu invokes: `check_update`
+fetches `https://mdwisp.com/latest.json` through `tauri-plugin-updater`
+(a Vercel rewrite of `latest.json` on the newest GitHub release) and
+compares versions locally; `install_update` downloads the matching
+bundle, verifies its minisign signature against `plugins.updater.pubkey`
+in `tauri.conf.json`, installs it and relaunches. Nothing runs at launch
+or on a timer, the endpoint URL carries none of the plugin's placeholders,
+and the plugin's JavaScript API is not granted to the webview, so the
+frontend can only ask the shell to run these two commands. The private key
+lives with the Apple material outside the repository; CI signs with the
+`TAURI_SIGNING_PRIVATE_KEY` secret and `tauri.release.conf.json` turns the
+update bundles on. `scripts/latest-manifest.sh` writes the manifest with one
+entry per installer kind (`darwin-aarch64`, `linux-x86_64-deb`,
+`windows-x86_64-nsis`, …), so a deb install never receives an AppImage.
+The App Store build detects the sandbox and offers the store page instead.
+The About box's "Check for Updates…" on macOS is a `mdwisp://check-updates`
+link in the panel's credits; the scheme is registered in `Info.plist` and
+the running app receives it as `RunEvent::Opened`.
+
 ## Frontend modules
 
 | Module | Role |

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>mdwisp — a minimalist Markdown editor that never touches the network</title>
-  <meta name="description" content="mdwisp is a minimalist, open-source Markdown viewer and editor for macOS, Linux and Windows. No network requests, no telemetry, no update checks. Documents cannot run code.">
+  <meta name="description" content="mdwisp is a minimalist, open-source Markdown viewer and editor for macOS, Linux and Windows. No telemetry, no automatic update checks, no network requests unless you ask. Documents cannot run code.">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0a0a0a">
   <link rel="canonical" href="https://mdwisp.com/">
@@ -42,6 +42,7 @@
     <section class="hero">
       <h1>Markdown. Nothing else.</h1>
       <p class="lede">A minimalist Markdown viewer and editor that never touches the network. Open source, for macOS, Linux and Windows.</p>
+      <p class="version" id="version" hidden></p>
       <p class="cta">
         <a class="button" id="primary" href="#download">Download</a>
         <a class="button button--quiet" href="https://github.com/gailleur/mdwisp/releases">All releases</a>
@@ -56,7 +57,7 @@
       </div>
       <div>
         <h2>Private</h2>
-        <p>The app makes no network requests. No update checks, no telemetry, no CDNs. Everything it needs is in the bundle.</p>
+        <p>The app makes no network requests on its own. No telemetry, no CDNs, no automatic update checks: <em>Help ▸ Check for Updates</em> connects only when you choose it, and compares versions on your machine.</p>
       </div>
       <div>
         <h2>Light</h2>
@@ -77,7 +78,7 @@
 
     <section class="download" id="download">
       <h2>Download</h2>
-      <p>Installers are built and published on GitHub for every release. Each release carries a <code>SHA256SUMS</code> file; verify a download with <code>sha256sum -c SHA256SUMS</code>.</p>
+      <p>Installers are built and published on GitHub for every release. Each release carries a <code>SHA256SUMS</code> file; verify a download with <code>sha256sum -c SHA256SUMS</code>. Once installed, <em>Help ▸ Check for Updates</em> in the app fetches and installs newer releases when you ask; nothing checks on its own.</p>
       <table>
         <tbody>
           <tr data-os="mac">
@@ -102,7 +103,7 @@
 
   <footer>
     <p>© 2026 <a href="https://gailleur.com">Gailleur Labs</a> · <a href="https://github.com/gailleur/mdwisp">github.com/gailleur/mdwisp</a> · Apache License 2.0 · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
-    <p class="fine">This page is static and loads nothing from anywhere else. It has no analytics.</p>
+    <p class="fine">This page is static and loads nothing from anywhere else; the version line above comes from this site's own release manifest. It has no analytics.</p>
   </footer>
 
   <script src="/app.js"></script>

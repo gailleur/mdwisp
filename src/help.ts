@@ -81,7 +81,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         "Math ($…$) and Mermaid diagrams render in reading view only. In the editor and source they are plain text you edit by hand.",
         "The editor saves normalised Markdown: “-” bullets, “*” emphasis, fenced code. A document you did not change is written back byte for byte.",
         "Relative images load from the document's folder and its subfolders, nowhere else.",
-        "Remote images are the only network access, and View ▸ Toggle Remote Images turns them off. Nothing else ever leaves this machine: no update checks, no telemetry.",
+        "The app never connects on its own: no automatic update checks, no telemetry. Help ▸ Check for Updates… fetches one small file from mdwisp.com when you choose it, and remote images load only while View ▸ Toggle Remote Images is on.",
         "HTML inside documents is sanitised: scripts, forms, event handlers and external styles are removed.",
         "Find inside the editor needs a recent webview. Reading and source modes always work.",
         "Closing the window closes every tab; you are asked about unsaved changes first.",

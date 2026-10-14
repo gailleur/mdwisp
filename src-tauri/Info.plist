@@ -7,5 +7,18 @@
        export-compliance questionnaire. -->
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
+  <!-- The "Check for Updates…" link in the About box is a URL the system
+       hands back to the running app (see about.rs); this registers it. -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.gailleur.mdwisp</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>mdwisp</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>

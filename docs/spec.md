@@ -153,10 +153,15 @@ does, not how any other product does it. All implementation is original.
 
 ## 7. Privacy
 
-- The application makes no network requests of its own: no update check, no
-  telemetry, no crash reporting, no font or asset CDNs. All assets are bundled.
-- The only network traffic that can ever occur is a remote image referenced
-  by a document the user opened, and that can be switched off.
+- The application makes no network requests of its own: no automatic update
+  check, no telemetry, no crash reporting, no font or asset CDNs. All assets
+  are bundled.
+- Two kinds of network traffic can occur, both only on the user's explicit
+  action: a remote image referenced by a document, which can be switched
+  off; and *Help ▸ Check for Updates…*, which fetches a fixed manifest URL
+  carrying no version or identifier, compares locally, and only on a second
+  choice downloads and installs a signed release. Nothing runs at launch or
+  on a timer. The Mac App Store build points at the store instead.
 - No account, no identifiers, no analytics.
 
 ## 8. Footprint

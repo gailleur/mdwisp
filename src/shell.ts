@@ -140,3 +140,30 @@ export function defaultMarkdownAppStatus(): Promise<boolean | null> {
 export function makeDefaultMarkdownApp(): Promise<string> {
   return invoke<string>("make_default_app");
 }
+
+// Updates. The check is the only network request the app ever makes by
+// itself, and only these calls make it; nothing runs at launch or on a timer.
+
+export type UpdateCheck =
+  | { kind: "store"; url: string }
+  | { kind: "upToDate"; version: string }
+  | { kind: "available"; version: string; date: string | null; notes: string | null };
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+
+/** Fetches the release manifest and compares it with this build. */
+export function checkForUpdates(): Promise<UpdateCheck> {
+  return invoke<UpdateCheck>("check_update");
+}
+
+/** Downloads, verifies and installs the update the last check found, then relaunches. */
+export function installUpdate(): Promise<void> {
+  return invoke("install_update");
+}
+
+export function onUpdateProgress(callback: (progress: UpdateProgress) => void): Promise<UnlistenFn> {
+  return listen<UpdateProgress>("update-progress", (event) => callback(event.payload));
+}
