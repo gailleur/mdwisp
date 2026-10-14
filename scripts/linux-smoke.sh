@@ -54,7 +54,8 @@ if [ -z "$win" ]; then
   done
   echo "--- process tree"; pstree -p "$app" || true
   echo "--- threads"; ls "/proc/$app/task" | wc -l
-  echo "--- stacks"; sudo gdb -p "$app" -batch -ex 'thread apply all bt 12' 2>/dev/null | grep -E '^#|^Thread' | head -120
+  echo "--- main thread"; sudo gdb -p "$app" -batch -ex 'thread 1' -ex 'bt 40' 2>/dev/null | grep -E '^#'
+  echo "--- all threads"; sudo gdb -p "$app" -batch -ex 'thread apply all bt 8' 2>/dev/null | grep -E '^#|^Thread' | head -200
   cat "$out/app.log"; exit 1
 fi
 xdotool windowactivate --sync "$win" || true
