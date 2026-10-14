@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Mac App Store build. -->
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+  <!-- WebKit's content process refuses to render anything, even the app's
+       own embedded pages, without the outgoing-connections entitlement.
+       The window stays blank without it. The app still never connects
+       anywhere: the Content Security Policy in tauri.conf.json is what
+       limits the webview, and the Rust side opens no sockets. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <!-- Files the user opens, drops, or saves through a dialog. -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+  <!-- Folders the user grants for images beside a document, kept across
+       launches as security-scoped bookmarks (src/sandbox.rs). -->
+  <key>com.apple.security.files.bookmarks.app-scope</key>
+  <true/>
+  <!-- Print and Export PDF. -->
+  <key>com.apple.security.print</key>
+  <true/>
+  <key>com.apple.application-identifier</key>
+  <string>B4JFYKNF47.com.gailleur.mdwisp</string>
+  <key>com.apple.developer.team-identifier</key>
+  <string>B4JFYKNF47</string>
+</dict>
+</plist>

@@ -19,6 +19,8 @@ export interface ShellDocument {
   name: string;
   dir: string;
   text: string;
+  /** True in the App Store sandbox, where the folder may be unreadable. */
+  sandboxed: boolean;
 }
 
 export function openDocument(path: string): Promise<ShellDocument> {
@@ -99,6 +101,18 @@ export async function pickFiles(): Promise<string[]> {
   });
   if (!result) return [];
   return Array.isArray(result) ? result : [result];
+}
+
+/** Asks the user for a folder, starting at `defaultPath`. Null if cancelled. */
+export async function pickFolder(defaultPath: string): Promise<string | null> {
+  const result = await openDialog({ directory: true, multiple: false, defaultPath });
+  if (!result) return null;
+  return Array.isArray(result) ? (result[0] ?? null) : result;
+}
+
+/** Keeps access to a folder the user chose (App Store sandbox). */
+export function rememberFolder(path: string): Promise<void> {
+  return invoke("remember_folder", { path });
 }
 
 export function watchFile(path: string, callback: () => void): Promise<UnlistenFn> {

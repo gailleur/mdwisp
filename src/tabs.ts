@@ -21,6 +21,8 @@ export interface LoadedDocument {
   name: string;
   dir: string;
   text: string;
+  /** True in the App Store sandbox, where the folder may be unreadable. */
+  sandboxed?: boolean;
 }
 
 export interface TabHost {
@@ -37,6 +39,8 @@ export interface TabHost {
   onTabStateChange: (tab: Tab) => void;
   /** Fires on every edit (not just dirty transitions). */
   onEdit?: (tab: Tab) => void;
+  /** A document opened whose folder the app is not allowed to read. */
+  onFolderUnreadable?: (tab: Tab) => void;
   onError: (message: string) => void;
 }
 
@@ -45,6 +49,8 @@ export interface Tab {
   path: string | null;
   name: string;
   dir: string | null;
+  /** True in the App Store sandbox, where the folder may be unreadable. */
+  sandboxed: boolean;
   title: string;
   mode: Mode;
   dirty: boolean;
@@ -171,6 +177,7 @@ export class Tabs {
           continue;
         }
         const tab = this.createTab(doc.path, doc.name, doc.dir, doc.text);
+        tab.sandboxed = doc.sandboxed === true;
         this.mount(tab);
         await this.showMode(tab, "view", { restoreScroll: false });
         tab.unwatch = await this.host.watch(doc.path, () => void this.onDiskChange(tab));
@@ -338,7 +345,7 @@ export class Tabs {
 
     const baseline = normalise(raw);
     return {
-      path, name, dir, title: name, mode: "view", dirty: false, conflict: false,
+      path, name, dir, sandboxed: false, title: name, mode: "view", dirty: false, conflict: false,
       button, panel, article, banner, text: baseline.text, baseline,
       wysiwyg: null, source: null, unwatch: null, busy: null, autosaveTimer: null,
     };
@@ -416,6 +423,7 @@ export class Tabs {
       allowRemoteImages: this.host.allowRemoteImages(),
       assetUrl: this.host.assetUrl,
       theme: this.host.theme,
+      onLocalImageError: tab.sandboxed ? () => this.host.onFolderUnreadable?.(tab) : undefined,
     };
     const result = await renderDocument(tab.article, tab.text, ctx);
     tab.title = result.title ?? tab.name;

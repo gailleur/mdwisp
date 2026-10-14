@@ -59,6 +59,22 @@ and the workflow re-checks the result with `codesign`, `spctl` and
 `stapler`. Forks without the secrets get an unsigned build. Windows builds
 are unsigned; the README explains how to open them.
 
+The Mac App Store build is separate: `.github/workflows/appstore.yml`, run
+by hand for a tag, builds a universal binary with the App Sandbox
+entitlements in `src-tauri/Entitlements.plist` merged in through
+`tauri.appstore.conf.json`, signs it with the Apple Distribution identity,
+wraps it with `productbuild` and uploads it with `altool`. The sandbox
+carries the outgoing-connections entitlement only because WebKit's content
+process renders nothing without it, even embedded pages; the Content
+Security Policy remains what keeps the webview off the network.
+`src-tauri/src/sandbox.rs` is the only code that knows about the sandbox:
+it reports whether the app is sandboxed, and keeps folders the user grants
+as security-scoped bookmarks. The frontend asks for a folder only when an
+image beside a document actually fails to load, since the sandbox lets the
+app list a granted file's folder but not read the files in it.
+Inside the sandbox a save cannot create the temp file beside the target,
+so `save_document` writes in place there.
+
 ## Frontend modules
 
 | Module | Role |

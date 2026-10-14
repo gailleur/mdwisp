@@ -108,6 +108,46 @@ async function offerDefaultApp(): Promise<void> {
   ]);
 }
 
+// Folder access (Mac App Store sandbox). A document grants access to itself
+// only; images beside it need the folder, which only the user can grant via
+// the folder dialog. Asked once per folder per session, and only when the
+// document actually shows local images.
+const foldersAsked = new Set<string>();
+
+function folderName(dir: string): string {
+  const parts = dir.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? dir;
+}
+
+function hasLocalImages(article: HTMLElement): boolean {
+  return Boolean(article.querySelector('img[src^="asset:"], img[src*="asset.localhost"]'));
+}
+
+function offerFolderAccess(tab: Tab, rerender: () => Promise<void>): void {
+  const dir = tab.dir;
+  if (!dir || foldersAsked.has(dir) || !hasLocalImages(tab.article)) return;
+  foldersAsked.add(dir);
+  showAppBanner(`Images in “${folderName(dir)}” need your permission to show.`, [
+    [
+      "allow",
+      () => {
+        void (async () => {
+          const chosen = await shell.pickFolder(dir);
+          if (!chosen) return;
+          try {
+            await shell.rememberFolder(chosen);
+            hideAppBanner();
+            await rerender();
+          } catch (error) {
+            reportError(`Could not keep access to the folder: ${String(error)}`);
+          }
+        })();
+      },
+    ],
+    ["not now", hideAppBanner],
+  ]);
+}
+
 async function copyText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -315,6 +355,7 @@ function boot(): void {
       if (tab === tabs.current) reflect(tab);
     },
     onEdit: scheduleOutline,
+    onFolderUnreadable: (tab) => offerFolderAccess(tab, () => tabs.rerenderAll()),
     onError: reportError,
   });
 

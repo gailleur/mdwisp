@@ -41,6 +41,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         "File ▸ Toggle Autosave writes a second after each change. Off by default.",
         "A file changed on disk reloads by itself; if you have unsaved edits a banner lets you keep yours or take the disk copy.",
         "File ▸ Use mdwisp for .md Files makes this the default Markdown app. The first launch offers it once; it is never changed without asking.",
+        "App Store build: the app can only see files you open. When a document shows images from its folder, a banner offers to grant that folder; the grant is remembered.",
       ],
     },
     {

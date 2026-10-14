@@ -88,6 +88,13 @@ does, not how any other product does it. All implementation is original.
   confirms through its own dialog; Windows opens the Default apps settings
   page; Linux writes `mimeapps.list` (deb and rpm only, since an AppImage
   is not registered with the desktop).
+- Folder access (Mac App Store build only): the sandboxed app can read the
+  files the user opens, drops or saves, and nothing else. When a document
+  renders images from its own folder and that folder is not readable, a
+  one-line banner offers to grant it through the system folder dialog. A
+  grant is remembered across launches; declining shows the document with
+  broken images and does not ask again that session. The direct-download
+  build is not sandboxed and reads a document's folder as before.
 
 ## 5. Editing
 

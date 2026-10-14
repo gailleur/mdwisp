@@ -18,6 +18,8 @@ export interface RenderContext {
   /** Turns an absolute filesystem path into a URL the webview may load. */
   assetUrl: (path: string) => string;
   theme: () => "light" | "dark";
+  /** An image beside the document failed to load (sandbox folder access). */
+  onLocalImageError?: () => void;
 }
 
 export interface RenderResult {
@@ -80,6 +82,9 @@ function resolveImages(root: HTMLElement, ctx: RenderContext): void {
     const resolved = resolveRelative(ctx.dir, src);
     if (resolved) {
       img.setAttribute("src", ctx.assetUrl(resolved));
+      if (ctx.onLocalImageError) {
+        img.addEventListener("error", ctx.onLocalImageError, { once: true });
+      }
     }
   }
 }

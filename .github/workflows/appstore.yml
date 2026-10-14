@@ -1,0 +1,93 @@
+name: App Store
+
+# Builds the sandboxed, universal macOS app, wraps it in a signed installer
+# package and uploads it to App Store Connect. Run by hand from the Actions
+# tab for a given tag; submitting for review stays a manual step on
+# appstoreconnect.apple.com.
+#
+# Secrets: APPSTORE_CERTIFICATES (base64 .p12 holding the "Apple
+# Distribution" and "3rd Party Mac Developer Installer" identities),
+# APPSTORE_CERTIFICATES_PASSWORD, APPSTORE_APP_IDENTITY, APPSTORE_INSTALLER_IDENTITY,
+# APPSTORE_PROVISIONING_PROFILE (base64 .provisionprofile), and the
+# APPLE_API_KEY / APPLE_API_ISSUER / APPLE_API_KEY_CONTENT trio shared with
+# release.yml for the upload.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or commit to build (for example v0.1.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Build and upload
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Provisioning profile and API key
+        env:
+          APPSTORE_PROVISIONING_PROFILE: ${{ secrets.APPSTORE_PROVISIONING_PROFILE }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          printf '%s' "$APPSTORE_PROVISIONING_PROFILE" | base64 --decode > src-tauri/embedded.provisionprofile
+          key="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s\n' "$APPLE_API_KEY_CONTENT" > "$key"
+          chmod 600 "$key"
+          echo "APPLE_API_KEY_PATH=$key" >> "$GITHUB_ENV"
+      - name: Build sandboxed universal app
+        # Tauri imports the certificates from APPLE_CERTIFICATE and signs
+        # with APPLE_SIGNING_IDENTITY. No notarization variables are set
+        # here on purpose: App Store builds are not notarized.
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPSTORE_CERTIFICATES }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPSTORE_APP_IDENTITY }}
+        run: |
+          pnpm tauri build --ci --no-bundle --target universal-apple-darwin
+          pnpm tauri bundle --ci --bundles app --target universal-apple-darwin \
+            --config src-tauri/tauri.appstore.conf.json
+      - name: Check entitlements
+        run: |
+          app=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
+          echo "app=$app" >> "$GITHUB_ENV"
+          codesign --verify --strict --verbose=2 "$app"
+          codesign -d --entitlements - "$app" | grep -q app-sandbox
+          lipo -info "$app/Contents/MacOS/mdwisp"
+      - name: Build installer package
+        env:
+          APPSTORE_INSTALLER_IDENTITY: ${{ secrets.APPSTORE_INSTALLER_IDENTITY }}
+        run: |
+          xcrun productbuild --sign "$APPSTORE_INSTALLER_IDENTITY" \
+            --component "$app" /Applications mdwisp.pkg
+          ls -l mdwisp.pkg
+      - name: Upload to App Store Connect
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          # altool looks for the key under ~/.private_keys or ./private_keys.
+          mkdir -p ~/.private_keys
+          cp "$APPLE_API_KEY_PATH" ~/.private_keys/AuthKey_"$APPLE_API_KEY".p8
+          xcrun altool --upload-app --type macos --file mdwisp.pkg \
+            --apiKey "$APPLE_API_KEY" --apiIssuer "$APPLE_API_ISSUER"

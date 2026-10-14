@@ -12,6 +12,7 @@
 mod about;
 mod defaults;
 mod pdf;
+mod sandbox;
 
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Mutex};
@@ -46,6 +47,36 @@ struct Document {
     name: String,
     dir: String,
     text: String,
+    /// True inside the App Sandbox, where a document grants access to
+    /// itself only and images beside it may fail to load.
+    sandboxed: bool,
+}
+
+/// Where granted folders are remembered (App Sandbox only).
+fn folder_store<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|d| d.join("folders.json"))
+        .map_err(|e| e.to_string())
+}
+
+/// Keeps access to a folder the user just chose, so images beside the
+/// documents in it load, now and on later launches. The folder dialog is
+/// the only way in: the app cannot grant itself anything.
+#[tauri::command]
+fn remember_folder<R: Runtime>(app: AppHandle<R>, path: String) -> Result<(), String> {
+    let dir = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    if !dir.is_dir() {
+        return Err("Not a folder.".into());
+    }
+    sandbox::remember(&folder_store(&app)?, &dir)?;
+    app.fs_scope()
+        .allow_directory(&dir, true)
+        .map_err(|e| e.to_string())?;
+    app.asset_protocol_scope()
+        .allow_directory(&dir, true)
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn looks_like_markdown(path: &Path) -> bool {
@@ -115,6 +146,7 @@ fn open_document<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Document
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default(),
+        sandboxed: sandbox::active(),
         dir: dir.to_string_lossy().into_owned(),
         path: path.to_string_lossy().into_owned(),
         text,
@@ -151,11 +183,20 @@ fn save_document<R: Runtime>(app: AppHandle<R>, path: String, text: String) -> R
         .map_err(|e| e.to_string())?;
     let target = dir.join(&name);
 
+    // Inside the App Sandbox a save grants access to the chosen file only,
+    // so the temp file beside it cannot be created; write in place then.
     let temp = dir.join(format!(".{name}.mdwisp-{}.tmp", std::process::id()));
-    std::fs::write(&temp, text.as_bytes()).map_err(|e| e.to_string())?;
-    if let Err(error) = std::fs::rename(&temp, &target) {
-        let _ = std::fs::remove_file(&temp);
-        return Err(error.to_string());
+    match std::fs::write(&temp, text.as_bytes()) {
+        Ok(()) => {
+            if let Err(error) = std::fs::rename(&temp, &target) {
+                let _ = std::fs::remove_file(&temp);
+                return Err(error.to_string());
+            }
+        }
+        Err(_) if sandbox::active() => {
+            std::fs::write(&target, text.as_bytes()).map_err(|e| e.to_string())?;
+        }
+        Err(error) => return Err(error.to_string()),
     }
 
     app.fs_scope()
@@ -449,10 +490,14 @@ pub fn run() {
             print_page,
             export_pdf,
             default_app_status,
-            make_default_app
+            make_default_app,
+            remember_folder
         ])
         .setup(|app| {
             build_menu(app.handle())?;
+            if let Ok(store) = folder_store(app.handle()) {
+                sandbox::restore(&store);
+            }
             queue_files(app.handle(), paths_from_args(std::env::args()));
             Ok(())
         })
