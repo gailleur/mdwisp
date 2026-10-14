@@ -64,15 +64,17 @@ xdotool windowsize "$win" 1200 760 || true
 sleep 2
 import -window root "$out/1-document.png"
 
-# Help menu: F10 opens the first menu, Left wraps to Help, Down skips
-# "mdwisp Help", Return runs "Check for Updates…".
-xdotool key --window "$win" F10
+# Help menu: the webview owns keyboard focus, so open the menu with the
+# mouse (menubar sits just below the client area's top edge), then walk
+# the items: Down selects "mdwisp Help", Down again "Check for Updates…".
+eval "$(xdotool getwindowgeometry --shell "$win")"
+xdotool mousemove $((X + 213)) $((Y + 13)) click 1
 sleep 1
-xdotool key Left
-sleep 1
-import -window root "$out/2-help-menu.png"
+xdotool key Down
+sleep 0.3
 xdotool key Down
 sleep 0.5
+import -window root "$out/2-help-menu.png"
 xdotool key Return
 sleep 12
 import -window root "$out/3-after-check.png"
