@@ -176,8 +176,8 @@ async function checkForUpdates(): Promise<void> {
         ["close", hideAppBanner],
       ]);
     } else if (result.kind === "upToDate") {
-      hideAppBanner();
-      toast(`mdwisp ${result.version} is up to date.`);
+      // Stays until dismissed, like the other outcomes; a toast was easy to miss.
+      showAppBanner(`mdwisp ${result.version} is up to date. It is the latest release.`, [["ok", hideAppBanner]]);
     } else {
       const day = releaseDay(result.date);
       const notes = result.notes?.split("\n").find((line) => line.trim()) ?? "";
