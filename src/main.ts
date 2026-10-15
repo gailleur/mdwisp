@@ -86,18 +86,42 @@ function settleDefaultApp(): void {
   hideAppBanner();
 }
 
+/** Reads whether mdwisp is the default and mirrors it into the File menu's
+ *  check mark. `null` where the platform cannot say (Windows). */
+async function refreshDefaultApp(): Promise<boolean | null> {
+  const status = await shell.defaultMarkdownAppStatus().catch(() => null);
+  shell.setMenuChecked("default-app", status === true);
+  return status;
+}
+
 async function makeDefaultApp(): Promise<void> {
-  try {
-    toast(await shell.makeDefaultMarkdownApp());
+  if ((await refreshDefaultApp()) === true) {
+    toast("mdwisp is already the default app for Markdown files");
     settleDefaultApp();
+    return;
+  }
+  try {
+    const message = await shell.makeDefaultMarkdownApp();
+    settleDefaultApp();
+    if ((await refreshDefaultApp()) === true) {
+      showAppBanner("mdwisp is now the default app for Markdown files.", [["ok", hideAppBanner]]);
+    } else {
+      toast(message);
+    }
   } catch (error) {
-    reportError(`Could not set the default app: ${String(error)}`);
+    // Choosing "Keep" in the macOS consent dialog lands here too, so this
+    // is a quiet note rather than an error.
+    await refreshDefaultApp();
+    toast(`default app unchanged: ${String(error)}`);
   }
 }
 
 async function offerDefaultApp(): Promise<void> {
+  const status = await refreshDefaultApp();
+  // The default can change behind the app's back (System Settings, another
+  // app); re-read it whenever the window comes back to the front.
+  window.addEventListener("focus", () => void refreshDefaultApp());
   if (readFlag(DEFAULT_APP_OFFERED, false)) return;
-  const status = await shell.defaultMarkdownAppStatus().catch(() => null);
   if (status === true) {
     writeFlag(DEFAULT_APP_OFFERED, true);
     return;

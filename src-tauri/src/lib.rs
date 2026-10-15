@@ -338,7 +338,11 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
-    let default_app = MenuItemBuilder::with_id("default-app", "Use mdwisp for .md Files").build(app)?;
+    // Checked while mdwisp is the system's default for .md; the frontend
+    // reads that from the platform and mirrors it here.
+    let default_app = CheckMenuItemBuilder::with_id("default-app", "Use mdwisp for .md Files")
+        .checked(false)
+        .build(app)?;
 
     let mut file = SubmenuBuilder::new(app, "File")
         .item(&new_doc)
