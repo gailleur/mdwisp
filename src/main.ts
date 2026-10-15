@@ -461,6 +461,7 @@ function boot(): void {
     save: shell.saveDocument,
     pickSavePath: shell.pickSavePath,
     confirmDiscard: shell.confirmDiscard,
+    confirmClose: shell.confirmClose,
     watch: shell.watchFile,
     assetUrl: shell.assetUrl,
     theme: () => theme.effective,

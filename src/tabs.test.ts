@@ -28,6 +28,7 @@ function makeHost(fs: FakeFs, overrides: Partial<TabHost> = {}): TabHost & { sav
     },
     pickSavePath: async () => "/docs/new.md",
     confirmDiscard: async () => true,
+    confirmClose: async () => "discard",
     watch: async (path, onChange) => {
       fs.watchers.set(path, onChange);
       return () => fs.watchers.delete(path);
@@ -128,9 +129,9 @@ describe("Tabs", () => {
     expect(tab.source!.getText()).toBe("# Mine\n");
   });
 
-  it("asks before closing a dirty tab and keeps it when refused", async () => {
+  it("asks before closing a dirty tab and keeps it on cancel", async () => {
     const { strip, viewer } = mount();
-    const host = makeHost(fs, { confirmDiscard: async () => false });
+    const host = makeHost(fs, { confirmClose: async () => "cancel" });
     const tabs = new Tabs(strip, viewer, host);
     await tabs.open(["/docs/a.md"]);
     await tabs.setMode("source");
@@ -138,6 +139,33 @@ describe("Tabs", () => {
     expect(await tabs.close(tabs.current as Tab)).toBe(false);
     expect(tabs.all.length).toBe(1);
     expect(await tabs.confirmCloseAll()).toBe(false);
+    expect(host.saves).toEqual([]);
+  });
+
+  it("saves and closes when the user chooses Save", async () => {
+    const { strip, viewer } = mount();
+    const host = makeHost(fs, { confirmClose: async () => "save" });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/a.md"]);
+    await tabs.setMode("source");
+    (tabs.current as Tab).source!.setText("# Saved on close\n");
+    expect(await tabs.close(tabs.current as Tab)).toBe(true);
+    expect(tabs.all.length).toBe(0);
+    expect(host.saves.length).toBe(1);
+    expect(host.saves[0]?.[0]).toBe("/docs/a.md");
+    expect(host.saves[0]?.[1]).toContain("Saved on close");
+  });
+
+  it("keeps the tab when Save is chosen but the Save As dialog is cancelled", async () => {
+    const { strip, viewer } = mount();
+    const host = makeHost(fs, { confirmClose: async () => "save", pickSavePath: async () => null });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.newDocument();
+    await tabs.setMode("source");
+    (tabs.current as Tab).source!.setText("draft");
+    expect(await tabs.confirmCloseAll()).toBe(false);
+    expect(tabs.all.length).toBe(1);
+    expect(host.saves).toEqual([]);
   });
 
   it("new documents ask for a path on first save and then watch it", async () => {

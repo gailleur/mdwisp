@@ -30,6 +30,8 @@ export interface TabHost {
   save: (path: string, text: string) => Promise<{ path: string; name: string; dir: string }>;
   pickSavePath: (defaultName: string) => Promise<string | null>;
   confirmDiscard: (message: string) => Promise<boolean>;
+  /** Save / Discard / Cancel before a dirty document closes. */
+  confirmClose: (name: string) => Promise<"save" | "discard" | "cancel">;
   watch: (path: string, onChange: () => void) => Promise<() => void>;
   assetUrl: (path: string) => string;
   theme: () => EffectiveTheme;
@@ -212,9 +214,7 @@ export class Tabs {
 
   /** Closes the tab, asking first if it has unsaved changes. Returns false if kept open. */
   async close(tab: Tab): Promise<boolean> {
-    if (tab.dirty && !(await this.host.confirmDiscard(`Discard unsaved changes to “${tab.name}”?`))) {
-      return false;
-    }
+    if (!(await this.settleBeforeClose(tab))) return false;
     const index = this.tabs.indexOf(tab);
     if (index < 0) return true;
     tab.unwatch?.();
@@ -241,8 +241,21 @@ export class Tabs {
     for (const tab of [...this.tabs]) {
       if (!tab.dirty) continue;
       this.activate(tab);
-      if (!(await this.host.confirmDiscard(`Discard unsaved changes to “${tab.name}”?`))) return false;
+      if (!(await this.settleBeforeClose(tab))) return false;
     }
+    return true;
+  }
+
+  /**
+   * For a dirty tab, asks Save / Discard / Cancel. Resolves true when the
+   * tab may close: saved, or discarded. A save that does not complete (the
+   * Save As dialog was cancelled, or writing failed) keeps the tab open.
+   */
+  private async settleBeforeClose(tab: Tab): Promise<boolean> {
+    if (!tab.dirty) return true;
+    const choice = await this.host.confirmClose(tab.name);
+    if (choice === "cancel") return false;
+    if (choice === "save") return this.save(tab);
     return true;
   }
 

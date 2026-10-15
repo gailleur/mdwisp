@@ -88,7 +88,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         "The app never connects on its own: no automatic update checks, no telemetry. Help ▸ Check for Updates… (also linked from the About box) fetches one small file from mdwisp.com when you choose it and reports the result in a banner at the top; remote images load only while View ▸ Remote Images is on.",
         "HTML inside documents is sanitised: scripts, forms, event handlers and external styles are removed.",
         "Find inside the editor needs a recent webview. Reading and source modes always work.",
-        "Closing the window closes every tab; you are asked about unsaved changes first.",
+        "Closing a tab or the window with unsaved changes asks whether to save, discard or cancel; Save on an unsaved document opens the Save As dialog.",
       ],
     },
   ];

@@ -48,6 +48,14 @@ export function confirmDiscard(message: string): Promise<boolean> {
   return ask(message, { title: "Unsaved changes", kind: "warning", okLabel: "Discard", cancelLabel: "Cancel" });
 }
 
+export type CloseChoice = "save" | "discard" | "cancel";
+
+/** Save / Discard / Cancel for a document with unsaved changes. */
+export async function confirmClose(name: string): Promise<CloseChoice> {
+  const choice = await invoke<string>("confirm_close", { name });
+  return choice === "save" || choice === "discard" ? choice : "cancel";
+}
+
 /** `handler` returns false to keep the window open. */
 export function onCloseRequested(handler: () => Promise<boolean>): Promise<UnlistenFn> {
   return getCurrentWindow().onCloseRequested(async (event) => {

@@ -230,6 +230,38 @@ fn take_pending_files(pending: State<'_, PendingFiles>) -> Vec<String> {
     pending.0.lock().map(|mut l| std::mem::take(&mut *l)).unwrap_or_default()
 }
 
+/// Asks what to do with unsaved changes before a tab or the window closes.
+/// Three buttons, as the platform's own editors offer: Save, Discard,
+/// Cancel. Returns "save", "discard" or "cancel"; closing the dialog
+/// counts as cancel. The dialog plugin's JavaScript API stops at two
+/// buttons, hence this command.
+#[tauri::command]
+async fn confirm_close<R: Runtime>(window: tauri::WebviewWindow<R>, name: String) -> Result<String, String> {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
+    let (tx, rx) = mpsc::channel::<MessageDialogResult>();
+    window
+        .dialog()
+        .message(format!("“{name}” has unsaved changes. Save them before closing?"))
+        .title("Unsaved changes")
+        .kind(MessageDialogKind::Warning)
+        .parent(&window)
+        .buttons(MessageDialogButtons::YesNoCancelCustom("Save".into(), "Discard".into(), "Cancel".into()))
+        .show_with_result(move |result| {
+            let _ = tx.send(result);
+        });
+    let result = tauri::async_runtime::spawn_blocking(move || rx.recv().map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())??;
+    Ok(match result {
+        MessageDialogResult::Yes => "save",
+        MessageDialogResult::No => "discard",
+        MessageDialogResult::Custom(label) if label == "Save" => "save",
+        MessageDialogResult::Custom(label) if label == "Discard" => "discard",
+        _ => "cancel",
+    }
+    .to_string())
+}
+
 /// Sets the check mark on a toggle menu item. The frontend holds the real
 /// state (it persists across launches) and calls this at startup and on
 /// every change, so the menu never disagrees with the status bar.
@@ -540,6 +572,7 @@ pub fn run() {
             open_document,
             save_document,
             take_pending_files,
+            confirm_close,
             set_menu_checked,
             print_page,
             export_pdf,
