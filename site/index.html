@@ -103,9 +103,11 @@
 
   <footer>
     <p>© 2026 <a href="https://gailleur.com">Gailleur Labs</a> · <a href="https://github.com/gailleur/mdwisp">github.com/gailleur/mdwisp</a> · Apache License 2.0 · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></p>
-    <p class="fine">This page is static and loads nothing from anywhere else; the version line above comes from this site's own release manifest. It has no analytics.</p>
   </footer>
 
   <script src="/app.js"></script>
+  <!-- Vercel Web Analytics: page views and visitor counts, no cookies, no cross-site tracking. -->
+  <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>mdwisp privacy policy</title>
-  <meta name="description" content="mdwisp collects nothing. The app makes no network requests unless you ask it to check for updates, and this site has no analytics.">
+  <meta name="description" content="mdwisp collects nothing. The app makes no network requests unless you ask it to check for updates, and this site uses only Vercel Web Analytics, which sets no cookies.">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0a0a0a">
   <link rel="canonical" href="https://mdwisp.com/privacy">
@@ -39,7 +39,7 @@
     <p>A few preferences on your own machine: window size and position, theme, zoom, whether the outline is shown, and whether you answered the one-time question about making mdwisp the default Markdown app. The Mac App Store version also keeps a record of folders you have granted access to, so images beside your documents keep loading. These stay in your user account and are never transmitted.</p>
 
     <h2>This website</h2>
-    <p>mdwisp.com is a static page served by Vercel. It sets no cookies, runs no analytics and loads nothing from third parties; the version line on the front page is read from this site's own <code>/latest.json</code>. Vercel, as the hosting provider, keeps standard server logs for operating the service, and that includes requests for the release manifest; see <a href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>. Downloads, including in-app updates, are served by GitHub under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</p>
+    <p>mdwisp.com is a static page served by Vercel. It uses <a href="https://vercel.com/docs/analytics/privacy-policy">Vercel Web Analytics</a> to count page views and visitors: it sets no cookies, does no cross-site tracking, and identifies a visitor only by a hash that Vercel discards after the day. Apart from that one script it loads nothing from third parties; the version line on the front page is read from this site's own <code>/latest.json</code>. Vercel, as the hosting provider, keeps standard server logs for operating the service, and that includes requests for the release manifest; see <a href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>. Downloads, including in-app updates, are served by GitHub under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</p>
 
     <h2>Open source</h2>
     <p>Every claim above can be checked. The complete source code is public at <a href="https://github.com/gailleur/mdwisp">github.com/gailleur/mdwisp</a> under the Apache License 2.0.</p>
@@ -51,5 +51,8 @@
   <footer>
     <p>© 2026 <a href="https://gailleur.com">Gailleur Labs</a> · <a href="https://github.com/gailleur/mdwisp">github.com/gailleur/mdwisp</a> · Apache License 2.0</p>
   </footer>
+  <!-- Vercel Web Analytics: page views and visitor counts, no cookies, no cross-site tracking. -->
+  <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
