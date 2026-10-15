@@ -76,7 +76,46 @@ None of the questionnaire items apply; result 4+.
 
 ## Review notes
 
-The app reads only files the user opens. To test: File ▸ Open any .md
-file, or drag one onto the window. Images beside a document trigger a
-one-line banner asking to grant the folder (App Sandbox); choosing
-"allow" opens the system folder dialog. No sign-in is needed.
+Apple asked for the information below on the first submission (Guideline
+2.1, limited review history, October 2026). It stays in the Notes field of
+App Review Information so later submissions have it on file.
+
+PURPOSE AND AUDIENCE
+mdwisp is a viewer and editor for Markdown (.md) files, the plain-text
+format used for README files, notes and documentation. It is for
+developers, writers and anyone who keeps notes in Markdown and wants a
+fast, private app that opens the file, renders it well and edits it in
+place without accounts, cloud sync or telemetry. The value is a document
+that stays a plain file on disk and an app that makes no network request
+on its own.
+
+SETUP AND MAIN FEATURES
+No sign-in, no account, no setup. Launch the app, then File ▸ Open (⌘O)
+any .md file, or drag one onto the window, or use File ▸ New (⌘N) and
+type. Any text file with Markdown works as a sample; one is attached to
+the review reply. Main features: three views of the same file (Reading
+⌘1, Editor ⌘2, Source ⌘3), tabs, outline sidebar (⌘⌥S), find (⌘F),
+light/dark theme (⌘⇧D), File ▸ Export PDF (⌘⇧E), File ▸ Print. The
+Help menu (⌘/) lists every shortcut. On first launch a one-line banner
+offers to make mdwisp the default app for .md files; it uses the system
+consent dialog and can be dismissed. Images stored beside a document
+trigger a banner asking to grant that folder (App Sandbox); choosing
+"allow" opens the system folder dialog.
+
+EXTERNAL SERVICES
+None. The app uses no data providers, authentication, payments,
+analytics, crash reporting or AI services. Rendering (Markdown, LaTeX
+maths, Mermaid diagrams) runs entirely inside the app bundle. The only
+network access is optional and user-initiated: a document that embeds an
+image from a web URL loads it only after View ▸ Toggle Remote Images is
+turned on. The App Store build has no update mechanism of its own;
+updates come through the App Store.
+
+REGIONAL DIFFERENCES
+None. The app behaves identically in every region; it is English-only
+and has no region-dependent content or features.
+
+REGULATED INDUSTRY / PROTECTED MATERIAL
+Not applicable. The app contains no third-party content; the source code
+is public under the Apache License 2.0 at github.com/gailleur/mdwisp,
+with third-party open-source notices included in the bundle.
