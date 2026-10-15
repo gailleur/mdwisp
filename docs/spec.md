@@ -61,7 +61,7 @@ does, not how any other product does it. All implementation is original.
   closes. Matches are highlighted; the active match is scrolled into view.
   Case-insensitive, literal (not regex).
 - Zoom: Cmd/Ctrl + / − / 0.
-- Outline: an optional left sidebar (⌘⌥S, View ▸ Outline, or ☰ in the
+- Outline: an optional left sidebar (⌘⌥S, View ▸ Outline Sidebar, or the outline button in the
   status bar) lists the document's headings with indentation. Clicking one
   jumps to it in whichever mode is active; the current section is
   highlighted as the reader scrolls or the cursor moves. The choice to show

@@ -38,7 +38,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         k("⌘W", "close tab"),
       ],
       notes: [
-        "File ▸ Toggle Autosave writes a second after each change. Off by default.",
+        "File ▸ Autosave writes a second after each change. Off by default.",
         "A file changed on disk reloads by itself; if you have unsaved edits a banner lets you keep yours or take the disk copy.",
         "File ▸ Use mdwisp for .md Files makes this the default Markdown app. The first launch offers it once; it is never changed without asking.",
         "App Store build: the app can only see files you open. When a document shows images from its folder, a banner offers to grant that folder; the grant is remembered.",
@@ -81,7 +81,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         "Math ($…$) and Mermaid diagrams render in reading view only. In the editor and source they are plain text you edit by hand.",
         "The editor saves normalised Markdown: “-” bullets, “*” emphasis, fenced code. A document you did not change is written back byte for byte.",
         "Relative images load from the document's folder and its subfolders, nowhere else.",
-        "The app never connects on its own: no automatic update checks, no telemetry. Help ▸ Check for Updates… fetches one small file from mdwisp.com when you choose it, and remote images load only while View ▸ Toggle Remote Images is on.",
+        "The app never connects on its own: no automatic update checks, no telemetry. Help ▸ Check for Updates… fetches one small file from mdwisp.com when you choose it, and remote images load only while View ▸ Remote Images is on.",
         "HTML inside documents is sanitised: scripts, forms, event handlers and external styles are removed.",
         "Find inside the editor needs a recent webview. Reading and source modes always work.",
         "Closing the window closes every tab; you are asked about unsaved changes first.",

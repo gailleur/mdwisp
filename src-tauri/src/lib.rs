@@ -22,7 +22,7 @@ use std::time::Duration;
 
 #[cfg(not(target_os = "macos"))]
 use tauri::menu::AboutMetadataBuilder;
-use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_fs::FsExt;
 
@@ -230,6 +230,25 @@ fn take_pending_files(pending: State<'_, PendingFiles>) -> Vec<String> {
     pending.0.lock().map(|mut l| std::mem::take(&mut *l)).unwrap_or_default()
 }
 
+/// Sets the check mark on a toggle menu item. The frontend holds the real
+/// state (it persists across launches) and calls this at startup and on
+/// every change, so the menu never disagrees with the status bar.
+#[tauri::command]
+fn set_menu_checked<R: Runtime>(app: AppHandle<R>, id: String, checked: bool) -> Result<(), String> {
+    use tauri::menu::{CheckMenuItem, MenuItemKind};
+    // `Menu::get` looks only at the top level; the toggles live in submenus.
+    fn find<R: Runtime>(items: Vec<MenuItemKind<R>>, id: &str) -> Option<CheckMenuItem<R>> {
+        items.into_iter().find_map(|item| match item {
+            MenuItemKind::Check(check) if check.id() == id => Some(check),
+            MenuItemKind::Submenu(sub) => sub.items().ok().and_then(|inner| find(inner, id)),
+            _ => None,
+        })
+    }
+    let menu = app.menu().ok_or("No menu.")?;
+    let item = find(menu.items().map_err(|e| e.to_string())?, &id).ok_or_else(|| format!("No toggle menu item {id}."))?;
+    item.set_checked(checked).map_err(|e| e.to_string())
+}
+
 /// Opens the system print dialog. The webview's own `window.print()` is used
 /// on platforms where the native call is not available. macOS goes through
 /// pdf.rs so the page gets real margins; the library call sets none.
@@ -304,7 +323,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let save_as = MenuItemBuilder::with_id("save-as", "Save As…")
         .accelerator("CmdOrCtrl+Shift+S")
         .build(app)?;
-    let autosave = MenuItemBuilder::with_id("autosave", "Toggle Autosave").build(app)?;
+    // Toggles are check items; the frontend owns the state and mirrors it
+    // into the check mark through `set_menu_checked`.
+    let autosave = CheckMenuItemBuilder::with_id("autosave", "Autosave").checked(false).build(app)?;
     let reload = MenuItemBuilder::with_id("reload", "Reload")
         .accelerator("CmdOrCtrl+R")
         .build(app)?;
@@ -395,8 +416,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&fmt("table", "Table", None)?)
         .build()?;
 
-    let outline = MenuItemBuilder::with_id("outline", "Outline")
+    let outline = CheckMenuItemBuilder::with_id("outline", "Outline Sidebar")
         .accelerator("CmdOrCtrl+Alt+S")
+        .checked(false)
         .build(app)?;
     let theme = MenuItemBuilder::with_id("theme", "Cycle Theme")
         .accelerator("CmdOrCtrl+Shift+D")
@@ -410,7 +432,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let zoom_reset = MenuItemBuilder::with_id("zoom-reset", "Actual Size")
         .accelerator("CmdOrCtrl+0")
         .build(app)?;
-    let remote_images = MenuItemBuilder::with_id("remote-images", "Toggle Remote Images")
+    let remote_images = CheckMenuItemBuilder::with_id("remote-images", "Remote Images")
+        .checked(false)
         .build(app)?;
     let mode_view = MenuItemBuilder::with_id("mode-view", "Reading")
         .accelerator("CmdOrCtrl+1")
@@ -513,6 +536,7 @@ pub fn run() {
             open_document,
             save_document,
             take_pending_files,
+            set_menu_checked,
             print_page,
             export_pdf,
             default_app_status,

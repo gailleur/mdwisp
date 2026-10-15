@@ -322,10 +322,22 @@ function boot(): void {
   let outlineOpen = readFlag(OUTLINE_KEY, false);
   let zoomIndex = ZOOM_STEPS.indexOf(1);
 
-  // Status bar: outline · mode · block · path · (spacer) · words · eol · theme
-  const outlineButton = el("button", "status__button", "☰");
+  // Status bar: outline · mode · block · path · (spacer) · autosave · words · eol · theme
+  const outlineButton = el("button", "status__button status__button--toggle", "☰ outline");
   outlineButton.type = "button";
-  outlineButton.title = `Outline (${keysFor("⌘⌥S", isMac)})`;
+  const autosaveButton = el("button", "status__button status__button--toggle");
+  autosaveButton.type = "button";
+  autosaveButton.title = "Click to turn autosave on or off (File ▸ Autosave)";
+  // Toggles show their state in the status bar and as a menu check mark.
+  const reflectToggles = () => {
+    outlineButton.classList.toggle("is-on", outlineOpen);
+    outlineButton.title = `${outlineOpen ? "Hide" : "Show"} the outline sidebar (${keysFor("⌘⌥S", isMac)})`;
+    autosaveButton.textContent = autosave ? "autosave on" : "autosave off";
+    autosaveButton.classList.toggle("is-on", autosave);
+    shell.setMenuChecked("autosave", autosave);
+    shell.setMenuChecked("outline", outlineOpen);
+    shell.setMenuChecked("remote-images", allowRemoteImages);
+  };
   const modeButton = el("button", "status__button status__button--mode");
   modeButton.type = "button";
   const blockButton = el("button", "status__button status__button--block");
@@ -334,7 +346,18 @@ function boot(): void {
   const pathItem = el("span", "status__item status__path");
   const wordsItem = el("span", "status__item");
   const eolItem = el("span", "status__item");
-  status.append(outlineButton, modeButton, blockButton, pathItem, el("span", "status__spacer"), wordsItem, eolItem, createThemeButton(theme));
+  status.append(
+    outlineButton,
+    modeButton,
+    blockButton,
+    pathItem,
+    el("span", "status__spacer"),
+    autosaveButton,
+    wordsItem,
+    eolItem,
+    createThemeButton(theme),
+  );
+  reflectToggles();
 
   let picker: Picker | null = null;
   const closePopup = () => {
@@ -431,9 +454,17 @@ function boot(): void {
   const toggleOutline = () => {
     outlineOpen = !outlineOpen;
     writeFlag(OUTLINE_KEY, outlineOpen);
+    reflectToggles();
     reflect(tabs.current);
   };
+  const toggleAutosave = () => {
+    autosave = !autosave;
+    writeFlag(AUTOSAVE_KEY, autosave);
+    reflectToggles();
+    toast(autosave ? "autosave: on" : "autosave: off");
+  };
   outlineButton.addEventListener("click", toggleOutline);
+  autosaveButton.addEventListener("click", toggleAutosave);
   modeButton.addEventListener("click", () => tabs.cycleMode());
 
   blockButton.addEventListener("click", () => {
@@ -514,11 +545,7 @@ function boot(): void {
     open: () => void openPicker(),
     save: () => void tabs.save(),
     "save-as": () => void tabs.save(tabs.current, true),
-    autosave: () => {
-      autosave = !autosave;
-      writeFlag(AUTOSAVE_KEY, autosave);
-      toast(autosave ? "autosave: on" : "autosave: off");
-    },
+    autosave: toggleAutosave,
     reload: () => tabs.reloadActive(),
     print: () => void shell.printPage(),
     "export-pdf": () => void exportPdf(),
@@ -537,6 +564,7 @@ function boot(): void {
     "remote-images": () => {
       allowRemoteImages = !allowRemoteImages;
       writeFlag(REMOTE_IMAGES_KEY, allowRemoteImages);
+      reflectToggles();
       toast(allowRemoteImages ? "remote images: on" : "remote images: off");
       void tabs.rerenderAll();
     },

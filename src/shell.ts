@@ -59,6 +59,11 @@ export function takePendingFiles(): Promise<string[]> {
   return invoke<string[]>("take_pending_files");
 }
 
+/** Mirrors a toggle's state into its menu check mark (autosave, outline…). */
+export function setMenuChecked(id: string, checked: boolean): void {
+  void invoke("set_menu_checked", { id, checked }).catch(() => undefined);
+}
+
 export async function printPage(): Promise<void> {
   const handled = await invoke<boolean>("print_page");
   if (!handled) {

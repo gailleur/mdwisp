@@ -400,6 +400,11 @@ html.is-mac .bar {
   color: var(--accent);
 }
 
+/* Toggles read as switches: muted when off, accent when on. */
+.status__button--toggle.is-on {
+  color: var(--accent);
+}
+
 .status__path {
   flex: 0 1 auto;
   min-width: 0;

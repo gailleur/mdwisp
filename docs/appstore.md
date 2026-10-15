@@ -107,7 +107,7 @@ None. The app uses no data providers, authentication, payments,
 analytics, crash reporting or AI services. Rendering (Markdown, LaTeX
 maths, Mermaid diagrams) runs entirely inside the app bundle. The only
 network access is optional and user-initiated: a document that embeds an
-image from a web URL loads it only after View ▸ Toggle Remote Images is
+image from a web URL loads it only after View ▸ Remote Images is
 turned on. The App Store build has no update mechanism of its own;
 updates come through the App Store.
 
