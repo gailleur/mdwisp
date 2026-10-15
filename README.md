@@ -56,6 +56,13 @@ Installers for each release are attached to the GitHub release with a
   app's.
 - **Linux**: `chmod +x` the AppImage, or install the `.deb`.
 
+### Trying it
+
+[`samples/showcase.md`](samples/showcase.md) exercises everything the app
+renders and edits: headings for the outline, lists and task lists, tables,
+code in several languages, maths, Mermaid diagrams, footnotes, sanitised
+HTML and a relative image. Open it after installing to see the three views.
+
 ### Updating
 
 mdwisp never checks for updates by itself. *Help ▸ Check for Updates…* (or

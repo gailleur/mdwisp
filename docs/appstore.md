@@ -92,8 +92,11 @@ on its own.
 SETUP AND MAIN FEATURES
 No sign-in, no account, no setup. Launch the app, then File ▸ Open (⌘O)
 any .md file, or drag one onto the window, or use File ▸ New (⌘N) and
-type. Any text file with Markdown works as a sample; one is attached to
-the review reply. Main features: three views of the same file (Reading
+type. Any text file with Markdown works as a sample; a document that
+exercises every feature is in the public repository:
+https://github.com/gailleur/mdwisp/blob/main/samples/showcase.md
+(raw file: https://raw.githubusercontent.com/gailleur/mdwisp/main/samples/showcase.md,
+save it with a .md extension). Main features: three views of the same file (Reading
 ⌘1, Editor ⌘2, Source ⌘3), tabs, outline sidebar (⌘⌥S), find (⌘F),
 light/dark theme (⌘⇧D), File ▸ Export PDF (⌘⇧E), File ▸ Print. The
 Help menu (⌘/) lists every shortcut. On first launch a one-line banner
