@@ -1075,13 +1075,20 @@ html.is-mac .bar {
   body {
     overflow: visible;
   }
+  /* Only the document goes to paper: no chrome, no outline sidebar, no
+     help overlay, whatever is open on screen. */
   .bar,
   .status,
   .find,
   .banner,
   .toast,
+  .outline,
+  .help,
   .code__copy {
     display: none !important;
+  }
+  .body {
+    display: block;
   }
   .viewer {
     overflow: visible;
