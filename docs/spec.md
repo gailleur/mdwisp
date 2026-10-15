@@ -38,8 +38,12 @@ does, not how any other product does it. All implementation is original.
 - Fenced code blocks keep their language class; a "copy" control copies the
   block's text. If the user has selected text inside the block, the control
   does not override the selection.
-- Math: `$…$`, `$$…$$`, `\(…\)`, `\[…\]` rendered by KaTeX with bundled
-  fonts. Errors render as the source, never throw.
+- Math: `$…$` inline, `$$…$$` and ```` ```math ```` fences as display,
+  recognised by the Markdown parser (remark-math) so their contents are
+  never read as Markdown, then typeset by KaTeX with bundled fonts. Pandoc's
+  rules apply to single dollars: the span hugs its contents and is not
+  followed by a digit, so prices stay text. Errors render as the source,
+  never throw.
 - Mermaid: fenced blocks tagged `mermaid` render as diagrams at Mermaid's
   strict security level. The SVG is embedded as an image (`data:` URL), so
   diagram content can never execute script. Failures fall back to showing the

@@ -5,9 +5,13 @@ import rehypeRaw from "rehype-raw";
 import rehypeSlug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
-import { unified } from "unified";
+import type { Root } from "mdast";
+import type { InlineMath } from "mdast-util-math";
+import { unified, type Plugin } from "unified";
+import { visit } from "unist-util-visit";
 
 import { sanitizeHtml } from "./sanitize";
 
@@ -31,9 +35,40 @@ const EXTERNAL = /^(https?:|mailto:|tel:)/i;
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const MARKDOWN_FILE = /\.(md|markdown|mdown|mkd)$/i;
 
+/**
+ * Tidies what remark-math found, the way Pandoc and GitHub read it:
+ * - `$$…$$` written inline is display maths, not inline;
+ * - a single-dollar span must hug its contents and not be followed by a
+ *   digit, so "$5 or $10" stays a price rather than becoming maths.
+ */
+const tidyMath: Plugin<[], Root> = () => (tree, file) => {
+  const source = String(file.value);
+  visit(tree, "inlineMath", (node: InlineMath, index, parent) => {
+    const start = node.position?.start.offset;
+    const end = node.position?.end.offset;
+    if (start === undefined || end === undefined || !parent || index === undefined) return;
+    if (source.startsWith("$$", start)) {
+      node.data = { ...node.data, hProperties: { className: ["language-math", "math-display"] } };
+      return;
+    }
+    const inner = source.slice(start + 1, end - 1);
+    const after = source.charAt(end);
+    const hugs = inner.length > 0 && !/^\s/.test(inner) && !/\s$/.test(inner);
+    if (!hugs || /\d/.test(after)) {
+      parent.children[index] = { type: "text", value: source.slice(start, end) };
+    }
+  });
+};
+
+// Maths is recognised while parsing (`$…$`, `$$…$$`, and ```math fences),
+// so its contents never pass through the Markdown rules: a lone "=" inside
+// a display block is not a heading underline. The TeX arrives in the HTML
+// as `code.language-math`; KaTeX typesets it afterwards.
 const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
+  .use(remarkMath)
+  .use(tidyMath)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(rehypeRaw)
   .use(rehypeSlug)
@@ -106,20 +141,23 @@ function disableCheckboxes(root: HTMLElement): void {
   }
 }
 
+/**
+ * Typesets the maths the parser marked. KaTeX is loaded only when a
+ * document has some. A `pre > code` block is display maths (from `$$` or a
+ * ```math fence); a bare `code` is inline. On a TeX error KaTeX shows the
+ * source in red rather than throwing.
+ */
 async function renderMath(root: HTMLElement): Promise<void> {
-  if (!/\$|\\\(|\\\[/.test(root.textContent ?? "")) return;
-  const { default: renderMathInElement } = await import("katex/contrib/auto-render");
-  renderMathInElement(root, {
-    delimiters: [
-      { left: "$$", right: "$$", display: true },
-      { left: "\\[", right: "\\]", display: true },
-      { left: "\\(", right: "\\)", display: false },
-      { left: "$", right: "$", display: false },
-    ],
-    ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code", "option"],
-    ignoredClasses: ["diagram"],
-    throwOnError: false,
-  });
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>("code.language-math"));
+  if (blocks.length === 0) return;
+  const katex = (await import("katex")).default;
+  for (const code of blocks) {
+    const display = code.parentElement?.tagName === "PRE" || code.classList.contains("math-display");
+    const host = document.createElement(display ? "div" : "span");
+    host.className = display ? "math math--display" : "math math--inline";
+    katex.render(code.textContent ?? "", host, { displayMode: display, throwOnError: false });
+    (display ? code.parentElement ?? code : code).replaceWith(host);
+  }
 }
 
 function isMermaidBlock(code: Element): boolean {
@@ -238,9 +276,11 @@ export async function renderDocument(
   resolveImages(container, ctx);
   markLinks(container);
   disableCheckboxes(container);
+  // Maths first: its blocks arrive as `pre > code` and must not get a copy
+  // button or be mistaken for a diagram.
+  await renderMath(container);
   collectDiagrams(container);
   addCopyControls(container);
-  await renderMath(container);
   void renderDiagrams(container, ctx.theme());
 
   const heading = container.querySelector("h1");

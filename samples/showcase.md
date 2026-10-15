@@ -146,8 +146,17 @@ $$
 $$
 
 $$
-\begin{pmatrix} a & b \\ c & d \end{pmatrix} \begin{pmatrix} x \\ y \end{pmatrix} = \begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}
+\begin{pmatrix} a & b \\ c & d \end{pmatrix}
+\begin{pmatrix} x \\ y \end{pmatrix}
+=
+\begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}
 $$
+
+GitHub-style fences work too:
+
+```math
+\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
+```
 
 A dollar sign on its own, like $5 or $10, is not maths.
 

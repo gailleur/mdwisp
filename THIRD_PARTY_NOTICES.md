@@ -7,7 +7,7 @@ own license, reproduced in the package's distribution and listed here.
 | --- | --- | --- |
 | Tauri (`tauri`, `tauri-build`, `@tauri-apps/api`, `@tauri-apps/cli`) | MIT / Apache-2.0 | Application shell |
 | Tauri plugins (`fs`, `dialog`, `opener`, `window-state`, `single-instance`) | MIT / Apache-2.0 | File dialogs, file watching, external links, window persistence |
-| unified, remark-parse, remark-gfm, remark-rehype, rehype-raw, rehype-stringify | MIT | Markdown parsing and HTML generation |
+| unified, remark-parse, remark-gfm, remark-math, mdast-util-math, unist-util-visit, remark-rehype, rehype-raw, rehype-slug, rehype-stringify | MIT | Markdown parsing and HTML generation |
 | DOMPurify | Apache-2.0 / MPL-2.0 | HTML sanitisation |
 | Milkdown (`@milkdown/kit`) and ProseMirror | MIT | WYSIWYG editor |
 | CodeMirror 6 and Lezer | MIT | Source editor |

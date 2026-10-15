@@ -77,6 +77,31 @@ describe("renderDocument", () => {
     await renderDocument(container, "Euler: $e^{i\\pi}+1=0$\n\n$$\\int_0^1 x\\,dx$$\n", ctx);
     expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
     expect(container.querySelector(".katex-display")).not.toBeNull();
+    expect(container.querySelector("code.language-math")).toBeNull();
+    expect(container.querySelector("button.code__copy")).toBeNull();
+  });
+
+  it("keeps Markdown syntax inside display math inert", async () => {
+    const container = document.createElement("div");
+    // A lone "=" line would otherwise turn the line above into a heading.
+    await renderDocument(container, "$$\n\\begin{pmatrix} a \\\\ b \\end{pmatrix}\n=\nx\n$$\n", ctx);
+    expect(container.querySelector("h1, h2")).toBeNull();
+    expect(container.querySelector(".katex-display")).not.toBeNull();
+  });
+
+  it("treats $$ on one line as display math", async () => {
+    const container = document.createElement("div");
+    await renderDocument(container, "Before.\n\n$$a^2 + b^2 = c^2$$\n\nAfter.\n", ctx);
+    expect(container.querySelector(".katex-display")).not.toBeNull();
+    expect(container.querySelector(".math--display")).not.toBeNull();
+  });
+
+  it("renders ```math fences as display math and leaves prices alone", async () => {
+    const container = document.createElement("div");
+    await renderDocument(container, "```math\nx^2\n```\n\nCosts $5 or $10, not maths.\n", ctx);
+    expect(container.querySelector(".katex-display")).not.toBeNull();
+    expect(container.querySelectorAll(".katex").length).toBe(1);
+    expect(container.textContent).toContain("$5 or $10");
   });
 
   it("turns mermaid blocks into diagram figures", async () => {
