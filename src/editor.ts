@@ -59,9 +59,14 @@ export interface EditorHeading {
 export interface WysiwygEditor {
   readonly root: HTMLElement;
   getMarkdown(): string;
-  /** True when the document equals what was last loaded. */
+  /** True when the document equals what was last loaded or saved. */
   isPristine(): boolean;
   setMarkdown(markdown: string): void;
+  /**
+   * Takes the current document as the new pristine state without touching
+   * it, so a save leaves the cursor and undo history where they are.
+   */
+  markSaved(): void;
   /** Text of the block containing the cursor; used to map positions across modes. */
   cursorBlockText(): string;
   /** Moves the cursor to the first block whose text matches. */
@@ -215,6 +220,9 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
     isPristine: () => view().state.doc.eq(baseline),
     setMarkdown: (next) => {
       editor.action(replaceAll(next));
+      baseline = view().state.doc;
+    },
+    markSaved: () => {
       baseline = view().state.doc;
     },
     cursorBlockText: () => view().state.selection.$from.parent.textContent,

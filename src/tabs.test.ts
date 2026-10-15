@@ -156,6 +156,23 @@ describe("Tabs", () => {
     expect(fs.watchers.has("/docs/new.md")).toBe(true);
   });
 
+  it("WYSIWYG: saving keeps the editor document instead of reloading it", async () => {
+    const { strip, viewer } = mount();
+    const host = makeHost(fs);
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/a.md"]);
+    await tabs.setMode("wysiwyg");
+    const tab = tabs.current as Tab;
+    const reload = vi.spyOn(tab.wysiwyg!, "setMarkdown");
+    const rebase = vi.spyOn(tab.wysiwyg!, "markSaved");
+    expect(await tabs.save()).toBe(true);
+    // Replacing the document would throw the cursor to the end on every autosave.
+    expect(reload).not.toHaveBeenCalled();
+    expect(rebase).toHaveBeenCalledTimes(1);
+    expect(tab.wysiwyg!.isPristine()).toBe(true);
+    expect(tab.dirty).toBe(false);
+  });
+
   it("WYSIWYG: untouched document stays pristine; edits serialise to markdown", async () => {
     const { strip, viewer } = mount();
     const host = makeHost(fs);

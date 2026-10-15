@@ -481,7 +481,15 @@ export class Tabs {
   }
 
   private markClean(tab: Tab): void {
-    if (tab.wysiwyg) tab.wysiwyg.setMarkdown(tab.text);
+    if (tab.wysiwyg) {
+      // The editor's own content was just saved: keep the document (and
+      // with it the cursor, selection and undo history) and only move the
+      // pristine mark. Reloading it would throw the cursor to the end on
+      // every autosave. A save made from another mode does need to reach
+      // the hidden editor instance.
+      if (tab.mode === "wysiwyg") tab.wysiwyg.markSaved();
+      else tab.wysiwyg.setMarkdown(tab.text);
+    }
     tab.dirty = false;
     tab.button.classList.remove("tab--dirty");
     this.host.onTabStateChange(tab);
