@@ -2,9 +2,11 @@
 // Copyright (c) 2026 Gailleur Labs
 
 //! Direct PDF export. Every system webview can print to a file without a
-//! dialog; this module drives that path and nothing else. The page is laid
-//! out with the same print stylesheet the Print command uses, so the two
-//! outputs match.
+//! dialog; this module drives that path. The page is laid out with the
+//! same print stylesheet the Print command uses, so the two outputs match.
+//! On macOS the Print command itself lives here too: the webview library's
+//! own print call hands AppKit zero margins, so Print builds the same page
+//! setup as the export and shows the panel instead of saving.
 //!
 //! Each platform hands its result back over a channel because WebView2 and
 //! WebKitGTK finish asynchronously on the main thread, while the command
@@ -26,6 +28,23 @@ pub async fn export<R: Runtime>(window: WebviewWindow<R>, path: PathBuf) -> Outc
     tauri::async_runtime::spawn_blocking(move || {
         rx.recv_timeout(Duration::from_secs(120))
             .map_err(|_| "PDF export did not finish.".to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Opens the system print panel with the same margins as the PDF export.
+#[cfg(target_os = "macos")]
+pub async fn print<R: Runtime>(window: WebviewWindow<R>) -> Outcome {
+    let (tx, rx) = mpsc::channel::<Outcome>();
+    window
+        .with_webview(move |webview| {
+            let _ = tx.send(platform::print(webview));
+        })
+        .map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        rx.recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "Print did not start.".to_string())?
     })
     .await
     .map_err(|e| e.to_string())?
@@ -89,6 +108,40 @@ mod platform {
         }
     }
 
+    /// A private copy of the shared print setup with half-inch margins.
+    /// Copying matters: other code paths mutate the shared object.
+    unsafe fn page_setup() -> Retained<NSPrintInfo> {
+        let info = NSPrintInfo::sharedPrintInfo().copy();
+        info.setLeftMargin(MARGIN_POINTS);
+        info.setRightMargin(MARGIN_POINTS);
+        info.setTopMargin(MARGIN_POINTS);
+        info.setBottomMargin(MARGIN_POINTS);
+        info.setHorizontallyCentered(false);
+        info.setVerticallyCentered(false);
+        info
+    }
+
+    /// The Print command: same page setup as the export, panel shown.
+    pub fn print(webview: PlatformWebview) -> Result<(), String> {
+        // SAFETY: as in `start`; the panel runs window-modal and AppKit
+        // owns the operation from here on.
+        unsafe {
+            let view: &WKWebView = &*(webview.inner() as *const WKWebView);
+            let window = view.window().ok_or("The document window is gone.")?;
+            let op = view.printOperationWithPrintInfo(&page_setup());
+            op.setShowsPrintPanel(true);
+            op.setShowsProgressPanel(true);
+            op.setCanSpawnSeparateThread(true);
+            op.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
+                &window,
+                None,
+                None,
+                std::ptr::null_mut(),
+            );
+            Ok(())
+        }
+    }
+
     fn start(webview: PlatformWebview, path: &Path, tx: Sender<super::Outcome>) -> Result<(), String> {
         let path = path.to_str().ok_or("Path is not valid UTF-8.")?;
         // SAFETY: Tauri invokes this closure on the main thread with a live
@@ -100,17 +153,11 @@ mod platform {
             let view: &WKWebView = &*(webview.inner() as *const WKWebView);
             let window = view.window().ok_or("The document window is gone.")?;
 
-            let info = NSPrintInfo::sharedPrintInfo().copy();
+            let info = page_setup();
             info.setJobDisposition(NSPrintSaveJob);
             let url = NSURL::fileURLWithPath(&NSString::from_str(path));
             info.dictionary()
                 .setObject_forKey(&url, ProtocolObject::from_ref(NSPrintJobSavingURL));
-            info.setLeftMargin(MARGIN_POINTS);
-            info.setRightMargin(MARGIN_POINTS);
-            info.setTopMargin(MARGIN_POINTS);
-            info.setBottomMargin(MARGIN_POINTS);
-            info.setHorizontallyCentered(false);
-            info.setVerticallyCentered(false);
 
             let op = view.printOperationWithPrintInfo(&info);
             op.setShowsPrintPanel(false);

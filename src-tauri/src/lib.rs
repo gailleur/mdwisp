@@ -231,10 +231,15 @@ fn take_pending_files(pending: State<'_, PendingFiles>) -> Vec<String> {
 }
 
 /// Opens the system print dialog. The webview's own `window.print()` is used
-/// on platforms where the native call is not available.
+/// on platforms where the native call is not available. macOS goes through
+/// pdf.rs so the page gets real margins; the library call sets none.
 #[tauri::command]
-fn print_page<R: Runtime>(window: tauri::WebviewWindow<R>) -> Result<bool, String> {
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
+async fn print_page<R: Runtime>(window: tauri::WebviewWindow<R>) -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        pdf::print(window).await.map(|_| true)
+    }
+    #[cfg(target_os = "windows")]
     {
         window.print().map(|_| true).map_err(|e| e.to_string())
     }
