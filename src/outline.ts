@@ -37,13 +37,29 @@ export function headingsFromMarkdown(text: string): Heading[] {
   return out;
 }
 
+export const OUTLINE_DEFAULT_WIDTH = 232;
+export const OUTLINE_MIN_WIDTH = 140;
+const OUTLINE_MAX_WIDTH = 600;
+
+/** Keeps the sidebar readable and leaves room for the document. */
+export function clampOutlineWidth(width: number, viewportWidth: number): number {
+  const max = Math.max(OUTLINE_MIN_WIDTH, Math.min(OUTLINE_MAX_WIDTH, Math.floor(viewportWidth * 0.6)));
+  if (!Number.isFinite(width)) return OUTLINE_DEFAULT_WIDTH;
+  return Math.round(Math.min(max, Math.max(OUTLINE_MIN_WIDTH, width)));
+}
+
 export class Outline {
   readonly element: HTMLElement;
   private readonly list: HTMLElement;
   private entries: OutlineEntry[] = [];
   private active = -1;
+  private width = OUTLINE_DEFAULT_WIDTH;
 
-  constructor() {
+  /**
+   * @param onResize called with the new width when the user finishes a drag
+   *   on the sidebar's right edge; the caller persists it.
+   */
+  constructor(private readonly onResize?: (width: number) => void) {
     this.element = document.createElement("aside");
     this.element.className = "outline";
     this.element.setAttribute("aria-label", "Outline");
@@ -62,7 +78,17 @@ export class Outline {
       this.entries[index]?.go();
     });
 
-    this.element.append(title, this.list);
+    const handle = document.createElement("div");
+    handle.className = "outline__handle";
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", "vertical");
+    handle.setAttribute("aria-label", "Resize outline");
+    handle.title = "Drag to resize";
+    handle.addEventListener("pointerdown", (event) => this.startDrag(event, handle));
+    handle.addEventListener("dblclick", () => this.setWidth(OUTLINE_DEFAULT_WIDTH, true));
+
+    this.element.append(title, this.list, handle);
+    this.applyWidth();
   }
 
   get isOpen(): boolean {
@@ -71,6 +97,43 @@ export class Outline {
 
   setOpen(open: boolean): void {
     this.element.hidden = !open;
+  }
+
+  /** Sets the sidebar width in CSS pixels, clamped to what fits. */
+  setWidth(width: number, notify = false): void {
+    const next = clampOutlineWidth(width, window.innerWidth);
+    const changed = next !== this.width;
+    this.width = next;
+    this.applyWidth();
+    if (notify && changed) this.onResize?.(next);
+  }
+
+  private applyWidth(): void {
+    this.element.style.setProperty("--outline-width", `${this.width}px`);
+  }
+
+  private startDrag(event: PointerEvent, handle: HTMLElement): void {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = this.width;
+    this.element.classList.add("outline--resizing");
+    document.body.classList.add("is-resizing-outline");
+    handle.setPointerCapture(event.pointerId);
+
+    const move = (e: PointerEvent) => this.setWidth(startWidth + (e.clientX - startX));
+    const finish = (e: PointerEvent) => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+      if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
+      this.element.classList.remove("outline--resizing");
+      document.body.classList.remove("is-resizing-outline");
+      if (this.width !== startWidth) this.onResize?.(this.width);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
   }
 
   setEntries(entries: OutlineEntry[]): void {

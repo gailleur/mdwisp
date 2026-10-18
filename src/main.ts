@@ -17,6 +17,7 @@ import { createThemeButton, Theme } from "./theme";
 const REMOTE_IMAGES_KEY = "mdwisp.remoteImages";
 const AUTOSAVE_KEY = "mdwisp.autosave";
 const OUTLINE_KEY = "mdwisp.outline";
+const OUTLINE_WIDTH_KEY = "mdwisp.outlineWidth";
 const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 const MODE_LABEL: Record<Mode, string> = { view: "reading", wysiwyg: "editing", source: "source" };
 const MODE_KEY: Record<Mode, string> = { view: "⌘1", wysiwyg: "⌘2", source: "⌘3" };
@@ -33,6 +34,23 @@ function readFlag(key: string, defaultValue: boolean): boolean {
 function writeFlag(key: string, value: boolean): void {
   try {
     localStorage.setItem(key, value ? "on" : "off");
+  } catch {
+    // Not persisted; harmless.
+  }
+}
+
+function readNumber(key: string): number | null {
+  try {
+    const value = Number(localStorage.getItem(key));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeNumber(key: string, value: number): void {
+  try {
+    localStorage.setItem(key, String(value));
   } catch {
     // Not persisted; harmless.
   }
@@ -339,7 +357,9 @@ function boot(): void {
 
   const theme = new Theme();
   const find = new FindBar(viewer);
-  const outline = new Outline();
+  const outline = new Outline((width) => writeNumber(OUTLINE_WIDTH_KEY, width));
+  const savedWidth = readNumber(OUTLINE_WIDTH_KEY);
+  if (savedWidth !== null) outline.setWidth(savedWidth);
   body.prepend(outline.element);
   let allowRemoteImages = readFlag(REMOTE_IMAGES_KEY, true);
   let autosave = readFlag(AUTOSAVE_KEY, false);

@@ -222,12 +222,55 @@ html.is-mac .bar {
 }
 
 .outline {
+  --outline-width: 232px;
   display: flex;
   flex-direction: column;
-  flex: 0 0 232px;
+  flex: 0 0 var(--outline-width);
+  width: var(--outline-width);
+  max-width: 60vw;
   min-height: 0;
+  position: relative;
   background: var(--elevated);
   border-right: 1px solid var(--line);
+}
+
+/* Drag strip on the right edge; straddles the border so it is easy to grab. */
+.outline__handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 1;
+  touch-action: none;
+}
+
+.outline__handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.outline__handle:hover::after,
+.outline--resizing .outline__handle::after {
+  opacity: 1;
+}
+
+/* While dragging, keep the cursor and stop the webview selecting text. */
+body.is-resizing-outline {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.is-resizing-outline .viewer {
+  pointer-events: none;
 }
 
 .outline__title {
