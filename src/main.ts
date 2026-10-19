@@ -163,7 +163,16 @@ function releaseDay(iso: string | null): string {
   return date.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
 }
 
+/**
+ * Settles unsaved tabs (Save / Discard / Cancel) and returns the paths to
+ * reopen after the relaunch, or null if the user cancelled. Set once the
+ * tabs exist.
+ */
+let prepareRelaunch: () => Promise<string[] | null> = async () => [];
+
 async function installUpdate(version: string): Promise<void> {
+  const reopen = await prepareRelaunch();
+  if (reopen === null) return;
   showAppBanner(`Downloading mdwisp ${version}…`, []);
   const unlisten = await shell.onUpdateProgress(({ downloaded, total }) => {
     const mb = (n: number) => (n / 1_000_000).toFixed(1);
@@ -171,7 +180,7 @@ async function installUpdate(version: string): Promise<void> {
     showAppBanner(text, []);
   });
   try {
-    await shell.installUpdate();
+    await shell.installUpdate(reopen);
     showAppBanner(`Installing mdwisp ${version}… the app will relaunch.`, []);
   } catch (error) {
     unlisten();
@@ -726,6 +735,10 @@ function boot(): void {
   });
   void shell.onDrop((paths) => void tabs.open(paths.filter(isMarkdownPath)));
   void shell.onCloseRequested(() => tabs.confirmCloseAll());
+  prepareRelaunch = async () => {
+    if (!(await tabs.confirmCloseAll())) return null;
+    return tabs.all.flatMap((tab) => (tab.path ? [tab.path] : []));
+  };
   void shell
     .onOpenFiles((paths) => void tabs.open(paths))
     .then(() => shell.takePendingFiles())

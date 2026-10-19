@@ -15,11 +15,12 @@
 //! sandbox could not replace the bundle anyway): there the same actions
 //! point at the store page.
 
+use std::ffi::OsString;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// mdwisp's page in the Mac App Store, opened by the store build's
@@ -89,10 +90,20 @@ pub async fn check_update<R: Runtime>(app: AppHandle<R>, found: State<'_, Found>
 }
 
 /// Downloads the update found by `check_update`, verifies its signature,
-/// installs it and relaunches. Progress goes out as `update-progress`
-/// events. On Windows the installer takes over and this process exits.
+/// installs it and relaunches with `reopen` (the documents that were open)
+/// as arguments, so they come back in the new version. Progress goes out as
+/// `update-progress` events. On Windows the installer takes over and this
+/// process exits.
+///
+/// The relaunch passes the paths explicitly because the original command
+/// line is not enough: on macOS a document opened from the Finder arrives
+/// as an Apple event, not an argument, so a plain restart came up empty.
 #[tauri::command]
-pub async fn install_update<R: Runtime>(app: AppHandle<R>, found: State<'_, Found>) -> Result<(), String> {
+pub async fn install_update<R: Runtime>(
+    app: AppHandle<R>,
+    found: State<'_, Found>,
+    reopen: Vec<String>,
+) -> Result<(), String> {
     let update = found
         .0
         .lock()
@@ -118,5 +129,11 @@ pub async fn install_update<R: Runtime>(app: AppHandle<R>, found: State<'_, Foun
         .await
         .map_err(|e| e.to_string())?;
 
-    app.restart();
+    // Same steps as `AppHandle::restart`, with the documents appended to the
+    // argument list the new process is started with.
+    let mut env = app.env();
+    env.args_os.truncate(1);
+    env.args_os.extend(reopen.into_iter().map(OsString::from));
+    app.cleanup_before_exit();
+    tauri::process::restart(&env)
 }

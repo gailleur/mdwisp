@@ -172,9 +172,12 @@ export function checkForUpdates(): Promise<UpdateCheck> {
   return invoke<UpdateCheck>("check_update");
 }
 
-/** Downloads, verifies and installs the update the last check found, then relaunches. */
-export function installUpdate(): Promise<void> {
-  return invoke("install_update");
+/**
+ * Downloads, verifies and installs the update the last check found, then
+ * relaunches with `reopen` (the documents open now) back in place.
+ */
+export function installUpdate(reopen: string[]): Promise<void> {
+  return invoke("install_update", { reopen });
 }
 
 export function onUpdateProgress(callback: (progress: UpdateProgress) => void): Promise<UnlistenFn> {
