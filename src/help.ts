@@ -61,6 +61,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         "The status bar, left to right: outline switch, mode (click to cycle), block type, path, then autosave switch, word count and reading time at 238 words per minute, line endings, theme. Switches are green while on.",
         "View ▸ Outline Sidebar and View ▸ Remote Images are ticked while on.",
         "Drag the outline's right edge to resize it; the width is remembered. Double-click the edge to restore the default.",
+        "On macOS the tab bar is the title bar: drag the window by the empty space at its right end, which tabs never cover. Double-click it to zoom the window.",
       ],
     },
     {

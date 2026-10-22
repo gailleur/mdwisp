@@ -8,7 +8,9 @@
   </head>
   <body>
     <header class="bar" id="bar" data-tauri-drag-region>
-      <div class="tabs" id="tabs" role="tablist" aria-label="Open documents"></div>
+      <div class="tabs" id="tabs" role="tablist" aria-label="Open documents" data-tauri-drag-region></div>
+      <!-- Never covered by tabs: the window can always be dragged from here. -->
+      <div class="bar__grip" data-tauri-drag-region aria-hidden="true"></div>
     </header>
     <div class="banner banner--app" id="app-banner" role="status" hidden></div>
     <div class="body" id="body">
