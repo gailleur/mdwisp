@@ -12,6 +12,7 @@ import { openBlockPicker, type Picker } from "./picker";
 import { isExternalHref, isMarkdownHref, resolveRelative } from "./render";
 import * as shell from "./shell";
 import { Tabs, type Mode, type Tab } from "./tabs";
+import { captureSession, restoreSession, saveSession, takeSession } from "./session";
 import { createThemeButton, Theme } from "./theme";
 
 const REMOTE_IMAGES_KEY = "mdwisp.remoteImages";
@@ -735,14 +736,26 @@ function boot(): void {
   });
   void shell.onDrop((paths) => void tabs.open(paths.filter(isMarkdownPath)));
   void shell.onCloseRequested(() => tabs.confirmCloseAll());
+  const surface = { tabs, viewer, zoom: () => ZOOM_STEPS[zoomIndex] ?? 1 };
+  const setZoomFactor = (factor: number) => {
+    const index = ZOOM_STEPS.findIndex((step) => Math.abs(step - factor) < 0.001);
+    setZoom(index >= 0 ? index : ZOOM_STEPS.indexOf(1));
+  };
   prepareRelaunch = async () => {
+    // Snapshot first: settling dirty tabs below switches the active tab.
+    const session = captureSession(surface);
     if (!(await tabs.confirmCloseAll())) return null;
-    return tabs.all.flatMap((tab) => (tab.path ? [tab.path] : []));
+    saveSession(session);
+    return session.tabs.map((entry) => entry.path);
   };
   void shell
     .onOpenFiles((paths) => void tabs.open(paths))
     .then(() => shell.takePendingFiles())
-    .then((paths) => tabs.open(paths));
+    .then(async (paths) => {
+      const session = takeSession();
+      if (session) await restoreSession(session, paths, surface, setZoomFactor);
+      else await tabs.open(paths);
+    });
 
   reflect(null);
   void offerDefaultApp();

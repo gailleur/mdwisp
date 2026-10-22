@@ -87,7 +87,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         "The editor saves normalised Markdown: “-” bullets, “*” emphasis, fenced code. A document you did not change is written back byte for byte.",
         "Relative images load from the document's folder and its subfolders, nowhere else.",
         "The app never connects on its own: no automatic update checks, no telemetry. Help ▸ Check for Updates… (also linked from the About box) fetches one small file from mdwisp.com when you choose it and reports the result in a banner at the top; remote images load only while View ▸ Remote Images is on.",
-        "Installing an update relaunches the app with the same documents open. Unsaved ones are asked about first.",
+        "Installing an update relaunches the app as you left it: the same documents, in the same view and place, with the same zoom. Unsaved ones are asked about first.",
         "HTML inside documents is sanitised: scripts, forms, event handlers and external styles are removed.",
         "Find inside the editor needs a recent webview. Reading and source modes always work.",
         "Closing a tab or the window with unsaved changes asks whether to save, discard or cancel; Save on an unsaved document opens the Save As dialog.",

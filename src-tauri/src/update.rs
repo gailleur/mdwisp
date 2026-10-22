@@ -129,6 +129,10 @@ pub async fn install_update<R: Runtime>(
         .await
         .map_err(|e| e.to_string())?;
 
+    // Exiting this way skips the event loop's exit path, where the window
+    // state plugin normally records size and position; do it here.
+    let _ = tauri_plugin_window_state::AppHandleExt::save_window_state(&app, tauri_plugin_window_state::StateFlags::all());
+
     // Same steps as `AppHandle::restart`, with the documents appended to the
     // argument list the new process is started with.
     let mut env = app.env();
