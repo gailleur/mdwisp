@@ -4,6 +4,7 @@
 import "katex/dist/katex.min.css";
 import "./styles.css";
 
+import { Explorer } from "./explorer";
 import { FindBar } from "./find";
 import { BLOCK_LABEL, type FormatKind } from "./format";
 import { keysFor, openHelp, type HelpPanel } from "./help";
@@ -19,6 +20,9 @@ const REMOTE_IMAGES_KEY = "mdwisp.remoteImages";
 const AUTOSAVE_KEY = "mdwisp.autosave";
 const OUTLINE_KEY = "mdwisp.outline";
 const OUTLINE_WIDTH_KEY = "mdwisp.outlineWidth";
+const FILES_KEY = "mdwisp.files";
+const FILES_WIDTH_KEY = "mdwisp.filesWidth";
+const FOLDER_KEY = "mdwisp.folder";
 const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 const MODE_LABEL: Record<Mode, string> = { view: "reading", wysiwyg: "editing", source: "source" };
 const MODE_KEY: Record<Mode, string> = { view: "⌘1", wysiwyg: "⌘2", source: "⌘3" };
@@ -52,6 +56,23 @@ function readNumber(key: string): number | null {
 function writeNumber(key: string, value: number): void {
   try {
     localStorage.setItem(key, String(value));
+  } catch {
+    // Not persisted; harmless.
+  }
+}
+
+function readString(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeString(key: string, value: string | null): void {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
   } catch {
     // Not persisted; harmless.
   }
@@ -355,8 +376,9 @@ function boot(): void {
   const empty = document.getElementById("empty");
   const emptyOpen = document.getElementById("empty-open");
   const emptyNew = document.getElementById("empty-new");
+  const emptyFolder = document.getElementById("empty-folder");
   const status = document.getElementById("status");
-  if (!strip || !body || !viewer || !empty || !emptyOpen || !emptyNew || !status) throw new Error("Shell markup missing.");
+  if (!strip || !body || !viewer || !empty || !emptyOpen || !emptyNew || !emptyFolder || !status) throw new Error("Shell markup missing.");
 
   const isMac = /Mac/i.test(navigator.platform);
   if (isMac) document.documentElement.classList.add("is-mac");
@@ -374,9 +396,51 @@ function boot(): void {
   let allowRemoteImages = readFlag(REMOTE_IMAGES_KEY, true);
   let autosave = readFlag(AUTOSAVE_KEY, false);
   let outlineOpen = readFlag(OUTLINE_KEY, false);
+  let filesOpen = readFlag(FILES_KEY, false);
   let zoomIndex = ZOOM_STEPS.indexOf(1);
 
-  // Status bar: outline · mode · block · path · (spacer) · autosave · words · eol · theme
+  // Files sidebar: the tree of one folder, leftmost. The folder is kept
+  // across launches; the shell re-grants access to it at startup.
+  const explorer = new Explorer({
+    list: shell.listFolder,
+    watch: shell.watchDir,
+    openFile: (path) => void tabs.open([path]),
+    pickFolder: () => void openFolder(),
+    closeFolder: () => void setFolder(null),
+    onResize: (width) => writeNumber(FILES_WIDTH_KEY, width),
+  });
+  const savedFilesWidth = readNumber(FILES_WIDTH_KEY);
+  if (savedFilesWidth !== null) explorer.setWidth(savedFilesWidth);
+  body.prepend(explorer.element);
+  const setFolder = async (folder: shell.ShellFolder | null) => {
+    writeString(FOLDER_KEY, folder?.path ?? null);
+    await explorer.setRoot(folder);
+  };
+  const openFolder = async () => {
+    const chosen = await shell.pickFolder(explorer.folder?.path ?? tabs.current?.dir ?? undefined);
+    if (!chosen) return;
+    try {
+      const folder = await shell.openFolder(chosen);
+      if (!filesOpen) toggleFiles();
+      await setFolder(folder);
+    } catch (error) {
+      reportError(`Could not open the folder: ${String(error)}`);
+    }
+  };
+  const restoreFolder = async () => {
+    const saved = readString(FOLDER_KEY);
+    if (!saved) return;
+    try {
+      await setFolder(await shell.openFolder(saved));
+    } catch {
+      // Moved, deleted, or (App Store) access was not kept: forget it.
+      writeString(FOLDER_KEY, null);
+    }
+  };
+
+  // Status bar: files · outline · mode · block · path · (spacer) · autosave · words · eol · theme
+  const filesButton = el("button", "status__button status__button--toggle", "▤ files");
+  filesButton.type = "button";
   const outlineButton = el("button", "status__button status__button--toggle", "☰ outline");
   outlineButton.type = "button";
   const autosaveButton = el("button", "status__button status__button--toggle");
@@ -384,6 +448,10 @@ function boot(): void {
   autosaveButton.title = "Click to turn autosave on or off (File ▸ Autosave)";
   // Toggles show their state in the status bar and as a menu check mark.
   const reflectToggles = () => {
+    filesButton.classList.toggle("is-on", filesOpen);
+    filesButton.title = `${filesOpen ? "Hide" : "Show"} the files sidebar (${keysFor("⌘⌥E", isMac)})`;
+    explorer.setOpen(filesOpen);
+    shell.setMenuChecked("files", filesOpen);
     outlineButton.classList.toggle("is-on", outlineOpen);
     outlineButton.title = `${outlineOpen ? "Hide" : "Show"} the outline sidebar (${keysFor("⌘⌥S", isMac)})`;
     autosaveButton.textContent = autosave ? "autosave on" : "autosave off";
@@ -401,6 +469,7 @@ function boot(): void {
   const wordsItem = el("span", "status__item");
   const eolItem = el("span", "status__item");
   status.append(
+    filesButton,
     outlineButton,
     modeButton,
     blockButton,
@@ -472,6 +541,7 @@ function boot(): void {
     }
     refreshOutline(tab);
     refreshCursorState();
+    void explorer.reveal(tab?.path ?? null);
     const name = tab ? (tab.mode === "view" ? tab.title : tab.name) : null;
     void shell.setWindowTitle(name ? `${tab?.dirty ? "• " : ""}${name} — mdwisp` : "mdwisp");
   };
@@ -512,12 +582,18 @@ function boot(): void {
     reflectToggles();
     reflect(tabs.current);
   };
+  const toggleFiles = () => {
+    filesOpen = !filesOpen;
+    writeFlag(FILES_KEY, filesOpen);
+    reflectToggles();
+  };
   const toggleAutosave = () => {
     autosave = !autosave;
     writeFlag(AUTOSAVE_KEY, autosave);
     reflectToggles();
     toast(autosave ? "autosave: on" : "autosave: off");
   };
+  filesButton.addEventListener("click", toggleFiles);
   outlineButton.addEventListener("click", toggleOutline);
   autosaveButton.addEventListener("click", toggleAutosave);
   modeButton.addEventListener("click", () => tabs.cycleMode());
@@ -543,6 +619,7 @@ function boot(): void {
   const openPicker = async () => tabs.open(await shell.pickFiles());
   emptyOpen.addEventListener("click", () => void openPicker());
   emptyNew.addEventListener("click", () => void tabs.newDocument());
+  emptyFolder.addEventListener("click", () => void openFolder());
 
   const setZoom = (index: number) => {
     zoomIndex = Math.min(Math.max(index, 0), ZOOM_STEPS.length - 1);
@@ -598,6 +675,7 @@ function boot(): void {
   const actions: Record<string, () => void> = {
     new: () => void tabs.newDocument(),
     open: () => void openPicker(),
+    "open-folder": () => void openFolder(),
     save: () => void tabs.save(),
     "save-as": () => void tabs.save(tabs.current, true),
     autosave: toggleAutosave,
@@ -612,6 +690,7 @@ function boot(): void {
     "mode-wysiwyg": () => void tabs.setMode("wysiwyg"),
     "mode-source": () => void tabs.setMode("source"),
     outline: toggleOutline,
+    files: toggleFiles,
     help: toggleHelp,
     "default-app": () => void makeDefaultApp(),
     "check-updates": () => void checkForUpdates(),
@@ -708,11 +787,16 @@ function boot(): void {
       toggleOutline();
       return;
     }
+    if (event.altKey && key === "e") {
+      event.preventDefault();
+      toggleFiles();
+      return;
+    }
     const id =
       key === "f" ? "find" :
       key === "g" ? (event.shiftKey ? "find-prev" : "find-next") :
       key === "n" ? "new" :
-      key === "o" ? "open" :
+      key === "o" ? (event.shiftKey ? "open-folder" : "open") :
       key === "s" ? (event.shiftKey ? "save-as" : "save") :
       key === "r" ? "reload" :
       key === "w" ? "close-tab" :
@@ -758,6 +842,7 @@ function boot(): void {
     });
 
   reflect(null);
+  void restoreFolder();
   void offerDefaultApp();
 }
 

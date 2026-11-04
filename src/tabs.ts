@@ -43,6 +43,8 @@ export interface TabHost {
   onEdit?: (tab: Tab) => void;
   /** A document opened whose folder the app is not allowed to read. */
   onFolderUnreadable?: (tab: Tab) => void;
+  /** The tabs were put in a different order (drag, or `move`). */
+  onReorder?: () => void;
   onError: (message: string) => void;
 }
 
@@ -95,6 +97,17 @@ export class Tabs {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button.tab");
       const tab = this.tabs.find((t) => t.button === button);
       if (tab) void this.close(tab);
+    });
+    // Press selects at once; a sideways pull from there reorders.
+    strip.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const target = event.target as HTMLElement;
+      if (target.closest(".tab__close")) return;
+      const button = target.closest<HTMLButtonElement>("button.tab");
+      const tab = this.tabs.find((t) => t.button === button);
+      if (!tab) return;
+      this.activate(tab);
+      if (this.tabs.length > 1) this.startDrag(event, tab);
     });
   }
 
@@ -236,6 +249,19 @@ export class Tabs {
     if (this.active) void this.close(this.active);
   }
 
+  /** Puts `tab` at `index` (clamped) in the strip, shifting the others. */
+  move(tab: Tab, index: number): void {
+    const from = this.tabs.indexOf(tab);
+    if (from < 0) return;
+    const to = Math.max(0, Math.min(index, this.tabs.length - 1));
+    if (from === to) return;
+    this.tabs.splice(from, 1);
+    this.tabs.splice(to, 0, tab);
+    const next = this.tabs[to + 1];
+    this.strip.insertBefore(tab.button, next ? next.button : null);
+    this.host.onReorder?.();
+  }
+
   /** Returns true when every tab agreed to close (used before quitting). */
   async confirmCloseAll(): Promise<boolean> {
     for (const tab of [...this.tabs]) {
@@ -325,6 +351,76 @@ export class Tabs {
   }
 
   // --- internals -----------------------------------------------------------
+
+  /**
+   * Drag to reorder. The pressed tab follows the pointer sideways while the
+   * others slide aside to show where it will land; the strip itself is only
+   * reordered on release. (Moving the button in the DOM mid-drag would make
+   * the webview drop its pointer capture.) Nothing happens until the
+   * pointer has moved a few pixels, so a plain click stays a click.
+   */
+  private startDrag(event: PointerEvent, tab: Tab): void {
+    const button = tab.button;
+    const strip = this.strip;
+    const stripLeft = strip.getBoundingClientRect().left - strip.scrollLeft;
+    // Where every tab sits in the strip's scrolled content, fixed for the
+    // whole drag since the DOM does not change until the drop.
+    const slots = this.tabs.map((t) => {
+      const rect = t.button.getBoundingClientRect();
+      return { left: rect.left - stripLeft, width: rect.width };
+    });
+    const from = this.tabs.indexOf(tab);
+    const own = slots[from];
+    if (!own) return;
+    const grab = event.clientX - stripLeft - own.left;
+    const startX = event.clientX;
+    let target = from;
+    let dragging = false;
+
+    const move = (e: PointerEvent) => {
+      if (!dragging) {
+        if (Math.abs(e.clientX - startX) < 4) return;
+        dragging = true;
+        button.classList.add("tab--dragging");
+        strip.classList.add("tabs--dragging");
+        document.body.classList.add("is-dragging-tab");
+      }
+      // The order follows the unclamped position, so a pull past either end
+      // still lands the tab there; only the drawing is kept inside the strip.
+      const wanted = e.clientX - stripLeft - grab;
+      const middle = wanted + own.width / 2;
+      target = 0;
+      slots.forEach((slot, i) => {
+        if (i !== from && middle > slot.left + slot.width / 2) target += 1;
+      });
+      const left = Math.max(0, Math.min(wanted, strip.scrollWidth - own.width));
+      button.style.transform = `translateX(${Math.round(left - own.left)}px)`;
+      this.tabs.forEach((other, i) => {
+        if (other === tab) return;
+        const shift =
+          from < target && i > from && i <= target ? -own.width :
+          target < from && i >= target && i < from ? own.width : 0;
+        other.button.style.transform = shift ? `translateX(${Math.round(shift)}px)` : "";
+      });
+    };
+    const finish = (e: PointerEvent) => {
+      button.removeEventListener("pointermove", move);
+      button.removeEventListener("pointerup", finish);
+      button.removeEventListener("pointercancel", finish);
+      button.removeEventListener("lostpointercapture", finish);
+      if (button.hasPointerCapture(e.pointerId)) button.releasePointerCapture(e.pointerId);
+      for (const t of this.tabs) t.button.style.transform = "";
+      button.classList.remove("tab--dragging");
+      strip.classList.remove("tabs--dragging");
+      document.body.classList.remove("is-dragging-tab");
+      if (dragging) this.move(tab, target);
+    };
+    button.setPointerCapture(event.pointerId);
+    button.addEventListener("pointermove", move);
+    button.addEventListener("pointerup", finish);
+    button.addEventListener("pointercancel", finish);
+    button.addEventListener("lostpointercapture", finish);
+  }
 
   private createTab(path: string | null, name: string, dir: string | null, raw: string): Tab {
     const button = document.createElement("button");

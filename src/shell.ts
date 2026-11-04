@@ -116,9 +116,9 @@ export async function pickFiles(): Promise<string[]> {
   return Array.isArray(result) ? result : [result];
 }
 
-/** Asks the user for a folder, starting at `defaultPath`. Null if cancelled. */
-export async function pickFolder(defaultPath: string): Promise<string | null> {
-  const result = await openDialog({ directory: true, multiple: false, defaultPath });
+/** Asks the user for a folder, starting at `defaultPath` if given. Null if cancelled. */
+export async function pickFolder(defaultPath?: string): Promise<string | null> {
+  const result = await openDialog({ directory: true, multiple: false, ...(defaultPath ? { defaultPath } : {}) });
   if (!result) return null;
   return Array.isArray(result) ? (result[0] ?? null) : result;
 }
@@ -128,8 +128,44 @@ export function rememberFolder(path: string): Promise<void> {
   return invoke("remember_folder", { path });
 }
 
+export interface ShellFolder {
+  path: string;
+  name: string;
+}
+
+export interface ShellEntry {
+  name: string;
+  path: string;
+  kind: "dir" | "file";
+  markdown: boolean;
+}
+
+/**
+ * Opens a folder for the files sidebar: checks it is readable and grants
+ * the webview access to it (kept across launches in the sandbox), and
+ * returns its canonical path and name.
+ */
+export function openFolder(path: string): Promise<ShellFolder> {
+  return invoke<ShellFolder>("open_folder", { path });
+}
+
+/** Direct children of a folder opened with `openFolder`, hidden entries left out. */
+export function listFolder(path: string): Promise<ShellEntry[]> {
+  return invoke<ShellEntry[]>("list_folder", { path });
+}
+
 export function watchFile(path: string, callback: () => void): Promise<UnlistenFn> {
   return watch(path, () => callback(), { delayMs: 300 });
+}
+
+/**
+ * Fires when a folder's own entries change, batched. Deliberately not
+ * recursive: the plugin's debounced watcher indexes every file under a
+ * recursive watch before it reports anything, which on a large tree takes
+ * seconds and hammers the disk.
+ */
+export function watchDir(path: string, callback: () => void): Promise<UnlistenFn> {
+  return watch(path, () => callback(), { delayMs: 300, recursive: false });
 }
 
 export function setWindowTitle(title: string): Promise<void> {

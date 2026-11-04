@@ -72,6 +72,17 @@ fn folder_store<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Lets the webview read (and watch) everything under `dir`, and load
+/// images from it.
+fn grant_folder<R: Runtime>(app: &AppHandle<R>, dir: &Path) -> Result<(), String> {
+    app.fs_scope()
+        .allow_directory(dir, true)
+        .map_err(|e| e.to_string())?;
+    app.asset_protocol_scope()
+        .allow_directory(dir, true)
+        .map_err(|e| e.to_string())
+}
+
 /// Keeps access to a folder the user just chose, so images beside the
 /// documents in it load, now and on later launches. The folder dialog is
 /// the only way in: the app cannot grant itself anything.
@@ -82,13 +93,80 @@ fn remember_folder<R: Runtime>(app: AppHandle<R>, path: String) -> Result<(), St
         return Err("Not a folder.".into());
     }
     sandbox::remember(&folder_store(&app)?, &dir)?;
-    app.fs_scope()
-        .allow_directory(&dir, true)
-        .map_err(|e| e.to_string())?;
-    app.asset_protocol_scope()
-        .allow_directory(&dir, true)
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    grant_folder(&app, &dir)
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Folder {
+    path: String,
+    name: String,
+}
+
+/// Opens a folder for the files sidebar. Like `remember_folder`, but it
+/// also checks the folder can be listed and reports its canonical path and
+/// name. Called with a folder the user picked in a dialog, or with the one
+/// remembered from the previous launch.
+#[tauri::command]
+fn open_folder<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Folder, String> {
+    let dir = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    if !dir.is_dir() {
+        return Err("Not a folder.".into());
+    }
+    std::fs::read_dir(&dir).map_err(|e| e.to_string())?;
+    sandbox::remember(&folder_store(&app)?, &dir)?;
+    grant_folder(&app, &dir)?;
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| dir.to_string_lossy().into_owned());
+    Ok(Folder { path: dir.to_string_lossy().into_owned(), name })
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Entry {
+    name: String,
+    path: String,
+    /// "dir" or "file"; symbolic links count as what they point to.
+    kind: &'static str,
+    /// A file the app can open.
+    markdown: bool,
+}
+
+/// Direct children of a folder the webview was granted (an open folder or a
+/// document's own folder), hidden entries left out. Anything else is
+/// refused: the sidebar can show only what the user handed the app.
+#[tauri::command]
+fn list_folder<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Vec<Entry>, String> {
+    let dir = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    if !app.fs_scope().is_allowed(&dir) {
+        return Err("Not an open folder.".into());
+    }
+    let mut entries = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let Ok(entry) = entry else { continue };
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let path = entry.path();
+        let kind = if path.is_dir() {
+            "dir"
+        } else if path.is_file() {
+            "file"
+        } else {
+            continue;
+        };
+        entries.push(Entry {
+            markdown: kind == "file" && looks_like_markdown(&path),
+            path: path.to_string_lossy().into_owned(),
+            name,
+            kind,
+        });
+    }
+    Ok(entries)
 }
 
 fn looks_like_markdown(path: &Path) -> bool {
@@ -349,6 +427,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let open = MenuItemBuilder::with_id("open", "Open…")
         .accelerator("CmdOrCtrl+O")
         .build(app)?;
+    let open_folder = MenuItemBuilder::with_id("open-folder", "Open Folder…")
+        .accelerator("CmdOrCtrl+Shift+O")
+        .build(app)?;
     let save = MenuItemBuilder::with_id("save", "Save")
         .accelerator("CmdOrCtrl+S")
         .build(app)?;
@@ -379,6 +460,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let mut file = SubmenuBuilder::new(app, "File")
         .item(&new_doc)
         .item(&open)
+        .item(&open_folder)
         .item(&default_app)
         .separator()
         .item(&save)
@@ -452,6 +534,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&fmt("table", "Table", None)?)
         .build()?;
 
+    let files = CheckMenuItemBuilder::with_id("files", "Files Sidebar")
+        .accelerator("CmdOrCtrl+Alt+E")
+        .checked(false)
+        .build(app)?;
     let outline = CheckMenuItemBuilder::with_id("outline", "Outline Sidebar")
         .accelerator("CmdOrCtrl+Alt+S")
         .checked(false)
@@ -485,6 +571,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&mode_wysiwyg)
         .item(&mode_source)
         .separator()
+        .item(&files)
         .item(&outline)
         .item(&theme)
         .item(&remote_images)
@@ -579,6 +666,8 @@ pub fn run() {
             default_app_status,
             make_default_app,
             remember_folder,
+            open_folder,
+            list_folder,
             update::check_update,
             update::install_update
         ])

@@ -14,8 +14,9 @@ does, not how any other product does it. All implementation is original.
 - macOS (Apple Silicon and Intel), Linux (x86_64, WebKitGTK 4.1), Windows 10+
   (WebView2).
 - Native shell: Tauri 2. Frontend: TypeScript, no UI framework.
-- One window, multiple documents as tabs. Closing the last tab leaves an empty
-  window with an Open action; it does not quit the app on macOS.
+- One window, multiple documents as tabs; drag a tab sideways to reorder.
+  Closing the last tab leaves an empty window with an Open action; it does
+  not quit the app on macOS.
 - Window size and position persist between launches.
 
 ## 2. Files
@@ -65,6 +66,18 @@ does, not how any other product does it. All implementation is original.
   closes. Matches are highlighted; the active match is scrolled into view.
   Case-insensitive, literal (not regex).
 - Zoom: Cmd/Ctrl + / − / 0.
+- Files: an optional left sidebar (⌘⌥E, View ▸ Files Sidebar, or the files
+  button in the status bar) shows the tree of one folder, opened with
+  File ▸ Open Folder… (⌘⇧O) or from the empty window. Folders expand on a
+  click and load lazily; Markdown files open as tabs; other files are listed
+  greyed out; hidden entries are left out. The entry of the active document
+  is highlighted, and its folders opened, as tabs change. Open folders are
+  each watched on their own, without recursion, so the tree follows changes
+  on disk and nothing ever walks the whole tree: opening a large checkout
+  costs one directory listing. The shell grants the webview the chosen folder only
+  (kept with a security-scoped bookmark in the App Store build), and the
+  listing command refuses any path outside what was granted. The folder,
+  the sidebar's visibility and its width persist.
 - Outline: an optional left sidebar (⌘⌥S, View ▸ Outline Sidebar, or the outline button in the
   status bar) lists the document's headings with indentation. Clicking one
   jumps to it in whichever mode is active; the current section is

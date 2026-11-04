@@ -225,7 +225,29 @@ html.is-mac .bar__grip {
   color: var(--strong);
 }
 
-/* Body: outline sidebar + viewer ------------------------------------------ */
+/* Being dragged sideways: lifted above its neighbours, which slide aside. */
+.tab--dragging {
+  position: relative;
+  z-index: 2;
+  background: var(--elevated);
+  box-shadow: 0 0 0 1px var(--line);
+  transition: none;
+}
+
+.tabs--dragging .tab:not(.tab--dragging) {
+  transition: transform 120ms;
+}
+
+body.is-dragging-tab {
+  cursor: grabbing;
+  user-select: none;
+}
+
+body.is-dragging-tab .tab {
+  cursor: grabbing;
+}
+
+/* Body: files sidebar + outline sidebar + viewer ---------------------------- */
 
 .body {
   display: flex;
@@ -241,12 +263,12 @@ html.is-mac .bar__grip {
   overscroll-behavior: contain;
 }
 
-.outline {
-  --outline-width: 232px;
+.sidebar {
+  --sidebar-width: 232px;
   display: flex;
   flex-direction: column;
-  flex: 0 0 var(--outline-width);
-  width: var(--outline-width);
+  flex: 0 0 var(--sidebar-width);
+  width: var(--sidebar-width);
   max-width: 60vw;
   min-height: 0;
   position: relative;
@@ -255,7 +277,7 @@ html.is-mac .bar__grip {
 }
 
 /* Drag strip on the right edge; straddles the border so it is easy to grab. */
-.outline__handle {
+.sidebar__handle {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -266,7 +288,7 @@ html.is-mac .bar__grip {
   touch-action: none;
 }
 
-.outline__handle::after {
+.sidebar__handle::after {
   content: "";
   position: absolute;
   top: 0;
@@ -278,22 +300,22 @@ html.is-mac .bar__grip {
   transition: opacity 120ms;
 }
 
-.outline__handle:hover::after,
-.outline--resizing .outline__handle::after {
+.sidebar__handle:hover::after,
+.sidebar--resizing .sidebar__handle::after {
   opacity: 1;
 }
 
 /* While dragging, keep the cursor and stop the webview selecting text. */
-body.is-resizing-outline {
+body.is-resizing {
   cursor: col-resize;
   user-select: none;
 }
 
-body.is-resizing-outline .viewer {
+body.is-resizing .viewer {
   pointer-events: none;
 }
 
-.outline__title {
+.sidebar__title {
   padding: 10px 14px 6px;
   color: var(--muted);
   font: 10.5px var(--mono);
@@ -339,6 +361,145 @@ body.is-resizing-outline .viewer {
   margin: 4px 8px;
   color: var(--muted);
   font: 11.5px var(--mono);
+}
+
+/* Files sidebar: one folder as a tree. */
+
+.explorer__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.explorer__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.explorer__close {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.explorer__close:hover {
+  background: var(--line);
+  color: var(--strong);
+}
+
+.explorer__tree {
+  flex: 1;
+  overflow: auto;
+  padding: 0 6px 12px;
+}
+
+.explorer__group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.explorer__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 8px 2px calc(6px + var(--depth, 0) * 12px);
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: nowrap;
+  transition: color 120ms;
+}
+
+.explorer__row:hover {
+  color: var(--strong);
+  background: var(--line);
+}
+
+.explorer__row:focus-visible {
+  outline-offset: -2px;
+}
+
+.explorer__row[data-kind="dir"] {
+  color: var(--muted);
+}
+
+.explorer__row--active {
+  color: var(--strong);
+  border-left-color: var(--accent);
+}
+
+.explorer__row--inert {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+/* Chevron for folders; an empty slot for files keeps names aligned. */
+.explorer__mark {
+  flex: none;
+  width: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  text-align: center;
+  transition: transform 120ms;
+}
+
+.explorer__row[aria-expanded="true"] .explorer__mark {
+  transform: rotate(90deg);
+}
+
+.explorer__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explorer__note {
+  padding: 2px 8px 2px calc(20px + var(--depth, 0) * 12px);
+  color: var(--muted);
+  font: 11.5px var(--mono);
+}
+
+.explorer__empty {
+  margin: 4px 8px 8px;
+  color: var(--muted);
+  font: 11.5px var(--mono);
+}
+
+.explorer__open {
+  margin: 0 8px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 11.5px var(--mono);
+}
+
+.explorer__open:hover {
+  border-color: var(--accent);
+  color: var(--strong);
 }
 
 .panel {
@@ -1143,14 +1304,14 @@ body.is-resizing-outline .viewer {
   body {
     overflow: visible;
   }
-  /* Only the document goes to paper: no chrome, no outline sidebar, no
-     help overlay, whatever is open on screen. */
+  /* Only the document goes to paper: no chrome, no sidebars, no help
+     overlay, whatever is open on screen. */
   .bar,
   .status,
   .find,
   .banner,
   .toast,
-  .outline,
+  .sidebar,
   .help,
   .code__copy {
     display: none !important;

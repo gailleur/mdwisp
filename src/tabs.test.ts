@@ -55,7 +55,7 @@ describe("Tabs", () => {
   let fs: FakeFs;
 
   beforeEach(() => {
-    fs = { files: new Map([["/docs/a.md", "# A\r\n\r\nhello *world*\r\n"]]), watchers: new Map() };
+    fs = { files: new Map([["/docs/a.md", "# A\r\n\r\nhello *world*\r\n"], ["/docs/b.md", "# B\n"], ["/docs/c.md", "# C\n"]]), watchers: new Map() };
     // jsdom lacks layout APIs CodeMirror probes.
     Object.defineProperty(HTMLElement.prototype, "getClientRects", { value: () => [] as unknown as DOMRectList, configurable: true });
     Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
@@ -215,6 +215,83 @@ describe("Tabs", () => {
     await tabs.setMode("source");
     // Round trip through the editor without edits keeps the original text.
     expect(tab.source!.getText()).toBe("# A\n\nhello *world*\n");
+  });
+});
+
+describe("Tab order", () => {
+  let fs: FakeFs;
+
+  beforeEach(() => {
+    fs = { files: new Map([["/docs/a.md", "# A\n"], ["/docs/b.md", "# B\n"], ["/docs/c.md", "# C\n"]]), watchers: new Map() };
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  const names = (tabs: Tabs) => tabs.all.map((t) => t.name);
+  const stripOrder = (strip: HTMLElement) => Array.from(strip.querySelectorAll(".tab__label")).map((el) => el.textContent);
+
+  it("move() reorders the model and the strip together and reports it", async () => {
+    const { strip, viewer } = mount();
+    const onReorder = vi.fn();
+    const tabs = new Tabs(strip, viewer, makeHost(fs, { onReorder }));
+    await tabs.open(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    const [a, , c] = tabs.all as [Tab, Tab, Tab];
+    tabs.move(c, 0);
+    expect(names(tabs)).toEqual(["c.md", "a.md", "b.md"]);
+    expect(stripOrder(strip)).toEqual(["C", "A", "B"]);
+    tabs.move(a, 99);
+    expect(names(tabs)).toEqual(["c.md", "b.md", "a.md"]);
+    expect(stripOrder(strip)).toEqual(["C", "B", "A"]);
+    tabs.move(a, 2); // already there
+    expect(onReorder).toHaveBeenCalledTimes(2);
+  });
+
+  it("a sideways drag slides the neighbours aside and reorders on release; a press alone selects", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost(fs));
+    await tabs.open(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    const [a, b, c] = tabs.all as [Tab, Tab, Tab];
+    // jsdom has no layout: give every tab a 100px slot in strip order.
+    Object.defineProperty(strip, "scrollWidth", { value: 300, configurable: true });
+    strip.getBoundingClientRect = () => new DOMRect(0, 0, 300, 38);
+    tabs.all.forEach((t, i) => {
+      t.button.getBoundingClientRect = () => new DOMRect(i * 100, 0, 100, 38);
+      t.button.setPointerCapture = vi.fn();
+      t.button.releasePointerCapture = vi.fn();
+      t.button.hasPointerCapture = vi.fn(() => true);
+    });
+    const pointer = (target: HTMLElement, type: string, clientX: number) =>
+      target.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, clientX, button: 0 }), { pointerId: 1 }));
+
+    // Press on A selects it. Pull it to the right, past B's and C's middles.
+    expect(tabs.current).toBe(c);
+    pointer(a.button, "pointerdown", 50);
+    expect(tabs.current).toBe(a);
+    pointer(a.button, "pointermove", 52); // under the drag threshold
+    expect(a.button.classList.contains("tab--dragging")).toBe(false);
+    pointer(a.button, "pointermove", 160);
+    expect(a.button.classList.contains("tab--dragging")).toBe(true);
+    expect(a.button.style.transform).toBe("translateX(110px)");
+    expect(b.button.style.transform).toBe("translateX(-100px)");
+    expect(c.button.style.transform).toBe("");
+    expect(names(tabs)).toEqual(["a.md", "b.md", "c.md"]); // not yet
+    pointer(a.button, "pointermove", 260);
+    expect(c.button.style.transform).toBe("translateX(-100px)");
+    pointer(a.button, "pointerup", 260);
+    expect(names(tabs)).toEqual(["b.md", "c.md", "a.md"]);
+    expect(stripOrder(strip)).toEqual(["B", "C", "A"]);
+    expect(a.button.classList.contains("tab--dragging")).toBe(false);
+    expect(tabs.all.every((t) => t.button.style.transform === "")).toBe(true);
+    expect(document.body.classList.contains("is-dragging-tab")).toBe(false);
+
+    // A press without movement changes nothing.
+    pointer(b.button, "pointerdown", 50);
+    pointer(b.button, "pointerup", 50);
+    expect(names(tabs)).toEqual(["b.md", "c.md", "a.md"]);
+    expect(tabs.current).toBe(b);
+
+    // The close control is not a drag handle.
+    pointer(a.button.querySelector<HTMLElement>(".tab__close")!, "pointerdown", 10);
+    expect(tabs.current).toBe(b);
   });
 });
 

@@ -3,46 +3,47 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { clampOutlineWidth, headingsFromMarkdown, Outline, OUTLINE_DEFAULT_WIDTH, OUTLINE_MIN_WIDTH } from "./outline";
+import { headingsFromMarkdown, Outline } from "./outline";
+import { clampSidebarWidth, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MIN_WIDTH } from "./sidebar";
 
 describe("Outline resizing", () => {
   it("clamps the width to a readable minimum and a share of the window", () => {
-    expect(clampOutlineWidth(50, 1200)).toBe(OUTLINE_MIN_WIDTH);
-    expect(clampOutlineWidth(300, 1200)).toBe(300);
-    expect(clampOutlineWidth(900, 1200)).toBe(600);
-    expect(clampOutlineWidth(500, 600)).toBe(360);
-    expect(clampOutlineWidth(Number.NaN, 1200)).toBe(OUTLINE_DEFAULT_WIDTH);
+    expect(clampSidebarWidth(50, 1200)).toBe(SIDEBAR_MIN_WIDTH);
+    expect(clampSidebarWidth(300, 1200)).toBe(300);
+    expect(clampSidebarWidth(900, 1200)).toBe(600);
+    expect(clampSidebarWidth(500, 600)).toBe(360);
+    expect(clampSidebarWidth(Number.NaN, 1200)).toBe(SIDEBAR_DEFAULT_WIDTH);
   });
 
   it("applies a restored width and reports a drag only when it changes something", () => {
     const onResize = vi.fn();
     const outline = new Outline(onResize);
     document.body.appendChild(outline.element);
-    expect(outline.element.style.getPropertyValue("--outline-width")).toBe(`${OUTLINE_DEFAULT_WIDTH}px`);
+    expect(outline.element.style.getPropertyValue("--sidebar-width")).toBe(`${SIDEBAR_DEFAULT_WIDTH}px`);
 
     outline.setWidth(300);
-    expect(outline.element.style.getPropertyValue("--outline-width")).toBe("300px");
+    expect(outline.element.style.getPropertyValue("--sidebar-width")).toBe("300px");
     expect(onResize).not.toHaveBeenCalled();
 
-    const handle = outline.element.querySelector<HTMLElement>(".outline__handle")!;
+    const handle = outline.element.querySelector<HTMLElement>(".sidebar__handle")!;
     handle.setPointerCapture = vi.fn();
     handle.releasePointerCapture = vi.fn();
     handle.hasPointerCapture = vi.fn(() => true);
     const pointer = (type: string, clientX: number) =>
       handle.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, clientX, button: 0 }), { pointerId: 1 }));
     pointer("pointerdown", 300);
-    expect(document.body.classList.contains("is-resizing-outline")).toBe(true);
+    expect(document.body.classList.contains("is-resizing")).toBe(true);
     pointer("pointermove", 340);
-    expect(outline.element.style.getPropertyValue("--outline-width")).toBe("340px");
+    expect(outline.element.style.getPropertyValue("--sidebar-width")).toBe("340px");
     pointer("pointerup", 340);
-    expect(document.body.classList.contains("is-resizing-outline")).toBe(false);
+    expect(document.body.classList.contains("is-resizing")).toBe(false);
     expect(onResize).toHaveBeenCalledWith(340);
 
     // Dragging below the minimum stops at the minimum.
     pointer("pointerdown", 340);
     pointer("pointermove", 0);
     pointer("pointerup", 0);
-    expect(onResize).toHaveBeenLastCalledWith(OUTLINE_MIN_WIDTH);
+    expect(onResize).toHaveBeenLastCalledWith(SIDEBAR_MIN_WIDTH);
     outline.element.remove();
   });
 });
