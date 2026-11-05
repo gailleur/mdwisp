@@ -16,6 +16,9 @@
     primary.textContent = "Download for " + row.querySelector("th").textContent;
   }
   if (note) note.textContent = (os === "mac" ? "Apple silicon. " : "") + "Free. Apache License 2.0.";
+  // The store button is in the page for everyone and shown to Mac visitors.
+  var store = document.getElementById("store");
+  if (store && os === "mac") store.hidden = false;
 })();
 
 (function () {
