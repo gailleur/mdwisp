@@ -3,7 +3,8 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/latest.json", "destination": "/api/latest" }
+    { "source": "/latest.json", "destination": "/api/latest" },
+    { "source": "/downloads.json", "destination": "/api/downloads" }
   ],
   "headers": [
     {
