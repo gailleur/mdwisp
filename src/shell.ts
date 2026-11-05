@@ -4,7 +4,7 @@
 // The only module that talks to the native shell. Everything else is plain
 // DOM code so it can run under jsdom in tests.
 
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { Channel, convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -152,6 +152,59 @@ export function openFolder(path: string): Promise<ShellFolder> {
 /** Direct children of a folder opened with `openFolder`, hidden entries left out. */
 export function listFolder(path: string): Promise<ShellEntry[]> {
   return invoke<ShellEntry[]>("list_folder", { path });
+}
+
+export interface FolderIndex {
+  /** Paths relative to the folder, with the platform's separator. */
+  files: string[];
+  /** True when the folder holds more Markdown files than were listed. */
+  truncated: boolean;
+}
+
+/**
+ * Every Markdown file under a folder opened with `openFolder`, for "go to
+ * file". Walks the tree on a background thread, within fixed limits.
+ */
+export function indexFolder(path: string): Promise<FolderIndex> {
+  return invoke<FolderIndex>("index_folder", { path });
+}
+
+export interface FolderHit {
+  line: number;
+  text: string;
+}
+
+export interface FolderFileHits {
+  path: string;
+  hits: FolderHit[];
+}
+
+export interface FolderSearchSummary {
+  files: number;
+  hits: number;
+  truncated: boolean;
+  cancelled: boolean;
+}
+
+/** One counter for searches and cancellations: the shell obeys the highest id it has seen. */
+let searchSerial = 0;
+
+/**
+ * Finds `query` (literal, case ignored) in the Markdown files of an open
+ * folder. Files with matches arrive on `onFile` while the search runs.
+ * Starting another search stops this one, which then resolves `cancelled`.
+ */
+export function searchFolder(path: string, query: string, onFile: (file: FolderFileHits) => void): Promise<FolderSearchSummary> {
+  const channel = new Channel<FolderFileHits>();
+  channel.onmessage = onFile;
+  searchSerial += 1;
+  return invoke<FolderSearchSummary>("search_folder", { path, query, id: searchSerial, onFile: channel });
+}
+
+/** Stops the folder search under way, if any. */
+export function cancelSearch(): void {
+  searchSerial += 1;
+  void invoke("cancel_search", { id: searchSerial }).catch(() => undefined);
 }
 
 export function watchFile(path: string, callback: () => void): Promise<UnlistenFn> {

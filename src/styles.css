@@ -201,6 +201,11 @@ html.is-mac .bar__grip {
   box-shadow: var(--glow);
 }
 
+/* A preview: here for a look, replaced by the next one unless it is kept. */
+.tab--preview .tab__label {
+  font-style: italic;
+}
+
 .tab__close {
   flex: 0 0 auto;
   display: inline-grid;
@@ -380,7 +385,7 @@ body.is-resizing .viewer {
   text-overflow: ellipsis;
 }
 
-.explorer__close {
+.explorer__tool {
   flex: none;
   display: inline-grid;
   place-items: center;
@@ -395,9 +400,13 @@ body.is-resizing .viewer {
   line-height: 1;
 }
 
-.explorer__close:hover {
+.explorer__tool:hover {
   background: var(--line);
   color: var(--strong);
+}
+
+.explorer__tool.is-on {
+  color: var(--accent);
 }
 
 .explorer__tree {
@@ -499,6 +508,153 @@ body.is-resizing .viewer {
 
 .explorer__open:hover {
   border-color: var(--accent);
+  color: var(--strong);
+}
+
+.explorer__search svg {
+  display: block;
+}
+
+/* Find in folder: the other face of the files sidebar. */
+
+.search {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.search__input {
+  margin: 0 8px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 12.5px var(--font);
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.search__input:focus {
+  border-color: var(--accent);
+}
+
+.search__input::placeholder {
+  color: var(--muted);
+}
+
+.search__status {
+  min-height: 1.5em;
+  margin: 6px 14px 4px;
+  color: var(--muted);
+  font: 10.5px/1.5 var(--mono);
+}
+
+.search__results {
+  flex: 1;
+  overflow: auto;
+  padding: 0 6px 12px;
+}
+
+.search__row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 8px 2px 6px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.search__row:hover {
+  color: var(--strong);
+  background: var(--line);
+}
+
+.search__row:focus-visible {
+  outline-offset: -2px;
+}
+
+.search__row--file {
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--strong);
+}
+
+.search__mark {
+  flex: none;
+  width: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  text-align: center;
+  transition: transform 120ms;
+}
+
+.search__row[aria-expanded="true"] .search__mark {
+  transform: rotate(90deg);
+}
+
+.search__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search__dir {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.search__count {
+  flex: none;
+  color: var(--muted);
+  font: 10.5px var(--mono);
+}
+
+.search__row--hit {
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+.search__row--active {
+  color: var(--strong);
+  border-left-color: var(--accent);
+}
+
+.search__line {
+  flex: none;
+  min-width: 2.2em;
+  color: var(--muted);
+  font: 10.5px var(--mono);
+  text-align: right;
+  opacity: 0.75;
+}
+
+.search__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search__match {
+  border-radius: 2px;
+  background: var(--mark);
   color: var(--strong);
 }
 
@@ -721,6 +877,116 @@ body.is-resizing .viewer {
 
 .prompt__input:focus {
   border-bottom-color: var(--accent);
+}
+
+/* Palette: the command palette and "go to file" -------------------------- */
+
+.palette {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: min(14vh, 110px);
+  background: rgb(0 0 0 / 0.3);
+}
+
+.palette__panel {
+  display: flex;
+  flex-direction: column;
+  width: min(580px, calc(100vw - 32px));
+  max-height: min(62vh, 440px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--elevated);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.35);
+}
+
+.palette__input {
+  flex: none;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--strong);
+  font: 14px var(--font);
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.palette__input::placeholder {
+  color: var(--muted);
+}
+
+.palette__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.palette__item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 10px;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+
+.palette__item--active {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--strong);
+}
+
+.palette__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette__detail {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.palette__hit {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.palette__keys {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font: 11px var(--mono);
+}
+
+.palette__empty,
+.palette__note {
+  flex: none;
+  margin: 0;
+  padding: 6px 14px;
+  color: var(--muted);
+  font: 11px/1.5 var(--mono);
+}
+
+.palette__note {
+  border-top: 1px solid var(--line);
 }
 
 /* Help panel -------------------------------------------------------------- */
@@ -1313,6 +1579,7 @@ body.is-resizing .viewer {
   .toast,
   .sidebar,
   .help,
+  .palette,
   .code__copy {
     display: none !important;
   }

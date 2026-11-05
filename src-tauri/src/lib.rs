@@ -12,6 +12,7 @@
 
 mod about;
 mod defaults;
+mod folder;
 mod pdf;
 mod sandbox;
 mod update;
@@ -169,7 +170,7 @@ fn list_folder<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Vec<Entry>
     Ok(entries)
 }
 
-fn looks_like_markdown(path: &Path) -> bool {
+pub(crate) fn looks_like_markdown(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| MARKDOWN_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
@@ -430,6 +431,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let open_folder = MenuItemBuilder::with_id("open-folder", "Open Folder…")
         .accelerator("CmdOrCtrl+Shift+O")
         .build(app)?;
+    let quick_open = MenuItemBuilder::with_id("quick-open", "Go to File…")
+        .accelerator("CmdOrCtrl+P")
+        .build(app)?;
     let save = MenuItemBuilder::with_id("save", "Save")
         .accelerator("CmdOrCtrl+S")
         .build(app)?;
@@ -442,8 +446,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let reload = MenuItemBuilder::with_id("reload", "Reload")
         .accelerator("CmdOrCtrl+R")
         .build(app)?;
+    // Not the platform's usual key: that one jumps to a file, as in every
+    // editor this app sits beside.
     let print = MenuItemBuilder::with_id("print", "Print…")
-        .accelerator("CmdOrCtrl+P")
+        .accelerator("CmdOrCtrl+Alt+P")
         .build(app)?;
     let export_pdf = MenuItemBuilder::with_id("export-pdf", "Export PDF…")
         .accelerator("CmdOrCtrl+Shift+E")
@@ -461,6 +467,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&new_doc)
         .item(&open)
         .item(&open_folder)
+        .item(&quick_open)
         .item(&default_app)
         .separator()
         .item(&save)
@@ -486,6 +493,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let find_prev = MenuItemBuilder::with_id("find-prev", "Find Previous")
         .accelerator("CmdOrCtrl+Shift+G")
         .build(app)?;
+    let search_folder = MenuItemBuilder::with_id("search-folder", "Find in Folder…")
+        .accelerator("CmdOrCtrl+Shift+F")
+        .build(app)?;
     let edit = SubmenuBuilder::new(app, "Edit")
         .undo()
         .redo()
@@ -498,6 +508,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&find)
         .item(&find_next)
         .item(&find_prev)
+        .item(&search_folder)
         .build()?;
 
     // Format: block types and inline marks. Ids are "fmt-<kind>" and the
@@ -534,6 +545,15 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&fmt("table", "Table", None)?)
         .build()?;
 
+    let palette = MenuItemBuilder::with_id("command-palette", "Command Palette…")
+        .accelerator("CmdOrCtrl+Shift+P")
+        .build(app)?;
+    let preview_tabs = CheckMenuItemBuilder::with_id("preview-tabs", "Preview Tabs")
+        .checked(false)
+        .build(app)?;
+    let restore_session = CheckMenuItemBuilder::with_id("restore-session", "Reopen Documents at Launch")
+        .checked(false)
+        .build(app)?;
     let files = CheckMenuItemBuilder::with_id("files", "Files Sidebar")
         .accelerator("CmdOrCtrl+Alt+E")
         .checked(false)
@@ -567,6 +587,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .accelerator("CmdOrCtrl+3")
         .build(app)?;
     let view = SubmenuBuilder::new(app, "View")
+        .item(&palette)
+        .separator()
         .item(&mode_view)
         .item(&mode_wysiwyg)
         .item(&mode_source)
@@ -575,6 +597,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&outline)
         .item(&theme)
         .item(&remote_images)
+        .item(&preview_tabs)
+        .item(&restore_session)
         .separator()
         .item(&zoom_in)
         .item(&zoom_out)
@@ -655,6 +679,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(PendingFiles::default())
         .manage(update::Found::default())
+        .manage(folder::CurrentSearch::default())
         .invoke_handler(tauri::generate_handler![
             open_document,
             save_document,
@@ -668,6 +693,9 @@ pub fn run() {
             remember_folder,
             open_folder,
             list_folder,
+            folder::index_folder,
+            folder::search_folder,
+            folder::cancel_search,
             update::check_update,
             update::install_update
         ])

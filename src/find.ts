@@ -174,11 +174,23 @@ export class FindBar {
     else this.open();
   }
 
+  /**
+   * Opens the bar on `query` without taking the focus, and lands on the
+   * match `choose` picks among all of them (the first if it picks none).
+   * This is how a result of find-in-folder is shown in its document.
+   */
+  show(query: string, choose?: (ranges: Range[]) => number): void {
+    this.element.hidden = false;
+    this.input.value = query;
+    this.search(query, -1, choose);
+  }
+
   /** Called when the target's content was replaced. */
   refresh(): void {
+    const previous = this.active;
     this.ranges = [];
     this.active = -1;
-    if (this.isOpen && this.query) this.search(this.query, true);
+    if (this.isOpen && this.query) this.search(this.query, previous);
     else this.updateCount();
   }
 
@@ -205,8 +217,12 @@ export class FindBar {
     return this.target !== null && (this.allowDomMutation || !this.painter.mutatesDom);
   }
 
-  private search(raw: string, keepIndex = false): void {
-    const previous = this.active;
+  /**
+   * Finds `raw` in the target. The match made active is the one `choose`
+   * picks, else the one at index `keep` (the match that was active before
+   * the content was replaced), else the first.
+   */
+  private search(raw: string, keep = -1, choose?: (ranges: Range[]) => number): void {
     this.clear();
     this.query = raw.trim();
     if (!this.query || !this.target) {
@@ -222,7 +238,8 @@ export class FindBar {
       this.updateCount();
       return;
     }
-    this.activate(keepIndex && previous >= 0 ? previous : 0);
+    const chosen = choose ? choose(this.ranges) : -1;
+    this.activate(chosen >= 0 ? chosen : keep >= 0 ? Math.min(keep, this.ranges.length - 1) : 0);
   }
 
   private activate(index: number): void {

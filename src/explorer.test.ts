@@ -20,11 +20,15 @@ const tree: Record<string, ExplorerEntry[]> = {
   "/w/Archive": [],
 };
 
-function makeHost(overrides: Partial<ExplorerHost> = {}): ExplorerHost & { opened: string[]; watching: Map<string, () => void> } {
+type FakeHost = ExplorerHost & { opened: string[]; previews: boolean[]; watching: Map<string, () => void> };
+
+function makeHost(overrides: Partial<ExplorerHost> = {}): FakeHost {
   const opened: string[] = [];
+  const previews: boolean[] = [];
   const watching = new Map<string, () => void>();
   return {
     opened,
+    previews,
     watching,
     list: async (path) => {
       const entries = tree[path];
@@ -35,7 +39,13 @@ function makeHost(overrides: Partial<ExplorerHost> = {}): ExplorerHost & { opene
       watching.set(path, onChange);
       return () => watching.delete(path);
     },
-    openFile: (path) => opened.push(path),
+    openFile: (path, preview) => {
+      opened.push(path);
+      previews.push(preview);
+    },
+    search: async () => ({ files: 0, hits: 0, truncated: false, cancelled: false }),
+    cancelSearch: () => {},
+    openHit: () => {},
     pickFolder: () => {},
     closeFolder: () => {},
     ...overrides,
@@ -146,6 +156,65 @@ describe("Explorer", () => {
     await explorer.setRoot(null);
     await flush();
     expect(host.watching.size).toBe(0);
+  });
+
+  it("opens a file as a preview on a click or Space, and for keeps on a double-click or Enter", async () => {
+    const host = makeHost();
+    const explorer = new Explorer(host);
+    document.body.appendChild(explorer.element);
+    await explorer.setRoot({ path: "/w", name: "w" });
+    const file = row(explorer, "/w/readme.md");
+    file.click();
+    file.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    file.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    file.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(host.opened).toEqual(Array(4).fill("/w/readme.md"));
+    expect(host.previews).toEqual([true, false, true, false]);
+
+    // A double-click on a folder is its two clicks and nothing more.
+    const before = host.opened.length;
+    row(explorer, "/w/docs").dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await flush();
+    expect(host.opened.length).toBe(before);
+    expect(row(explorer, "/w/docs").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("turns into find-in-folder and back, only with a folder open", async () => {
+    const search = vi.fn(async () => ({ files: 0, hits: 0, truncated: false, cancelled: false }));
+    const explorer = new Explorer(makeHost({ search }));
+    document.body.appendChild(explorer.element);
+    explorer.setOpen(true);
+    const tree = explorer.element.querySelector<HTMLElement>(".explorer__tree")!;
+    const panel = explorer.element.querySelector<HTMLElement>(".search")!;
+    const button = explorer.element.querySelector<HTMLButtonElement>(".explorer__search")!;
+
+    expect(button.hidden).toBe(true);
+    expect(explorer.setSearching(true)).toBe(false);
+    expect(panel.hidden).toBe(true);
+
+    await explorer.setRoot({ path: "/w", name: "w" });
+    expect(button.hidden).toBe(false);
+    expect(explorer.setSearching(true, "invoice")).toBe(true);
+    expect(explorer.searching).toBe(true);
+    expect(tree.hidden).toBe(true);
+    expect(panel.hidden).toBe(false);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    const input = panel.querySelector<HTMLInputElement>(".search__input")!;
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("invoice");
+    expect(search).toHaveBeenCalledWith("/w", "invoice", expect.any(Function));
+
+    // Escape in the field, or the button, goes back to the tree, which kept its state.
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(explorer.searching).toBe(false);
+    expect(tree.hidden).toBe(false);
+    expect(labels(explorer)).toEqual(["Archive", "docs", "logo.png", "readme.md"]);
+    button.click();
+    expect(explorer.searching).toBe(true);
+
+    await explorer.setRoot(null);
+    expect(explorer.searching).toBe(false);
+    expect(panel.hidden).toBe(true);
   });
 
   it("closing the folder goes through the host", async () => {

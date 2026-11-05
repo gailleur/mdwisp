@@ -4,13 +4,15 @@
 // Files sidebar: the tree of one folder the user opened. Folders expand on
 // demand, Markdown files open in a tab, everything else is listed but
 // inert. The panel only draws what the host lists; the shell decides what
-// a folder may show.
+// a folder may show. The same panel turns into find-in-folder (search.ts)
+// and back; the tree keeps its state meanwhile.
 //
 // Cost is proportional to what is on screen: a folder is listed when it is
 // opened, and only open folders are watched, each on its own and without
 // recursion. Nothing ever walks the whole tree, so a huge folder (a code
 // checkout with its dependencies) opens as fast as a small one.
 
+import { SearchView, type SearchHost } from "./search";
 import { Sidebar } from "./sidebar";
 
 export interface ExplorerEntry {
@@ -31,8 +33,16 @@ export interface ExplorerHost {
   list: (path: string) => Promise<ExplorerEntry[]>;
   /** Calls back when the folder's own entries change (not its subfolders'). Resolves to the stop function. */
   watch: (path: string, onChange: () => void) => Promise<() => void>;
-  /** A Markdown file was chosen. */
-  openFile: (path: string) => void;
+  /**
+   * A Markdown file was chosen. `preview` is true for a passing look (a
+   * single click, Space) and false for a deliberate open (double-click,
+   * Enter).
+   */
+  openFile: (path: string, preview: boolean) => void;
+  /** Find in folder: see `SearchHost`. */
+  search: SearchHost["search"];
+  cancelSearch: SearchHost["cancel"];
+  openHit: SearchHost["openHit"];
   /** The "open folder" control in the empty panel. */
   pickFolder: () => void;
   /** The user closed the folder with the × control. */
@@ -69,7 +79,10 @@ export class Explorer extends Sidebar {
   private root: ExplorerRoot | null = null;
   private readonly name: HTMLElement;
   private readonly closeButton: HTMLButtonElement;
+  private readonly searchButton: HTMLButtonElement;
   private readonly tree: HTMLElement;
+  private readonly search: SearchView;
+  private searchMode = false;
   private readonly children = new Map<string, ExplorerEntry[]>();
   private readonly expanded = new Set<string>();
   /** One watcher per open folder, keyed by its path. */
@@ -88,25 +101,64 @@ export class Explorer extends Sidebar {
     this.name.className = "sidebar__title explorer__name";
     this.closeButton = document.createElement("button");
     this.closeButton.type = "button";
-    this.closeButton.className = "explorer__close";
+    this.closeButton.className = "explorer__tool explorer__close";
     this.closeButton.title = "Close folder";
     this.closeButton.setAttribute("aria-label", "Close folder");
     this.closeButton.textContent = "×";
     this.closeButton.addEventListener("click", () => host.closeFolder());
-    head.append(this.name, this.closeButton);
+    this.searchButton = document.createElement("button");
+    this.searchButton.type = "button";
+    this.searchButton.className = "explorer__tool explorer__search";
+    this.searchButton.title = "Find in folder";
+    this.searchButton.setAttribute("aria-label", "Find in folder");
+    this.searchButton.setAttribute("aria-pressed", "false");
+    this.searchButton.appendChild(magnifier());
+    this.searchButton.addEventListener("click", () => this.setSearching(!this.searchMode));
+    head.append(this.name, this.searchButton, this.closeButton);
 
     this.tree = document.createElement("div");
     this.tree.className = "explorer__tree";
-    this.tree.addEventListener("click", (event) => this.onClick(event));
+    this.tree.addEventListener("click", (event) => this.onClick(event, true));
+    this.tree.addEventListener("dblclick", (event) => this.onClick(event, false));
     this.tree.addEventListener("keydown", (event) => this.onKey(event));
 
-    this.element.append(head, this.tree, this.handle);
+    this.search = new SearchView({
+      search: host.search,
+      cancel: host.cancelSearch,
+      openHit: host.openHit,
+      exit: () => this.setSearching(false),
+    });
+
+    this.element.append(head, this.tree, this.search.element, this.handle);
     this.setHeader();
     this.render();
   }
 
   get folder(): ExplorerRoot | null {
     return this.root;
+  }
+
+  /** True while the panel shows find-in-folder instead of the tree. */
+  get searching(): boolean {
+    return this.searchMode;
+  }
+
+  /**
+   * Switches between the file tree and find-in-folder, which needs an open
+   * folder. Going in puts the cursor in the search field, with `text` as
+   * the query if given. Returns whether the search is now showing.
+   */
+  setSearching(on: boolean, text?: string): boolean {
+    const was = this.searchMode;
+    this.searchMode = on && this.root !== null;
+    this.tree.hidden = this.searchMode;
+    this.search.setOpen(this.searchMode);
+    this.searchButton.classList.toggle("is-on", this.searchMode);
+    this.searchButton.setAttribute("aria-pressed", this.searchMode ? "true" : "false");
+    this.searchButton.title = this.searchMode ? "Back to the files" : "Find in folder";
+    if (this.searchMode) this.search.focus(text);
+    else if (was) this.tree.querySelector<HTMLElement>('.explorer__row[tabindex="0"]')?.focus();
+    return this.searchMode;
   }
 
   /** Shows a folder (or none). The tree is loaded fresh. */
@@ -116,6 +168,8 @@ export class Explorer extends Sidebar {
     for (const dir of [...this.expanded]) this.collapse(dir);
     this.generation += 1;
     this.setHeader();
+    this.search.setRoot(root?.path ?? null);
+    if (!root) this.setSearching(false);
     if (root) {
       this.expand(root.path);
       await this.load([root.path]);
@@ -184,6 +238,7 @@ export class Explorer extends Sidebar {
     this.name.textContent = this.root?.name ?? "files";
     this.name.title = this.root?.path ?? "";
     this.closeButton.hidden = this.root === null;
+    this.searchButton.hidden = this.root === null;
   }
 
   private load(dirs: string[], force = false): Promise<void> {
@@ -304,15 +359,20 @@ export class Explorer extends Sidebar {
     }
   }
 
-  private onClick(event: MouseEvent): void {
+  private onClick(event: MouseEvent, single: boolean): void {
     const row = (event.target as HTMLElement).closest<HTMLButtonElement>(".explorer__row");
-    if (row) this.act(row);
+    if (!row) return;
+    // A double-click is two clicks first: the folder has toggled twice
+    // already and the file is open as a preview; all that is left is to
+    // keep the file.
+    if (single) this.act(row, true);
+    else if (row.dataset["kind"] !== "dir") this.act(row, false);
   }
 
-  private act(row: HTMLButtonElement): void {
+  private act(row: HTMLButtonElement, preview: boolean): void {
     const path = row.dataset["path"] ?? "";
     if (row.dataset["kind"] === "dir") void this.toggle(path);
-    else if (row.getAttribute("aria-disabled") !== "true") this.host.openFile(path);
+    else if (row.getAttribute("aria-disabled") !== "true") this.host.openFile(path, preview);
   }
 
   private onKey(event: KeyboardEvent): void {
@@ -353,12 +413,38 @@ export class Explorer extends Sidebar {
         focus(rows[rows.length - 1]);
         break;
       case "Enter":
+        this.act(row, false);
+        break;
       case " ":
-        this.act(row);
+        this.act(row, true);
         break;
       default:
         return;
     }
     event.preventDefault();
   }
+}
+
+/** A small magnifying glass, drawn so it does not depend on a font having the glyph. */
+function magnifier(): SVGSVGElement {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 12 12");
+  svg.setAttribute("width", "11");
+  svg.setAttribute("height", "11");
+  svg.setAttribute("aria-hidden", "true");
+  const ring = document.createElementNS(ns, "circle");
+  ring.setAttribute("cx", "5");
+  ring.setAttribute("cy", "5");
+  ring.setAttribute("r", "3.5");
+  const stem = document.createElementNS(ns, "path");
+  stem.setAttribute("d", "M7.6 7.6 11 11");
+  for (const shape of [ring, stem]) {
+    shape.setAttribute("fill", "none");
+    shape.setAttribute("stroke", "currentColor");
+    shape.setAttribute("stroke-width", "1.4");
+    shape.setAttribute("stroke-linecap", "round");
+    svg.appendChild(shape);
+  }
+  return svg;
 }

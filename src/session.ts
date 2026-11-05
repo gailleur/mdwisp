@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Gailleur Labs
 
-// What the window looks like, captured just before an in-app update
-// relaunches the app and put back once the new version starts: the open
-// documents in order, which one was active, each one's mode and position,
-// and the zoom. Everything else the user sets (outline, theme, autosave,
-// remote images, window size) is already persisted on its own.
+// What the window looks like: the open documents in order, which one was
+// active, each one's mode and position, and the zoom. Everything else the
+// user sets (sidebars, theme, autosave, remote images, window size) is
+// already persisted on its own.
 //
-// The snapshot lives in localStorage under one key and is consumed by the
-// very next launch, so a normal start never sees it.
+// Two snapshots are kept in localStorage. One is taken just before an
+// in-app update relaunches the app and is consumed by the very next
+// launch. The other is kept up to date while the app runs and is what an
+// ordinary launch reopens, if the user wants documents reopened.
 
 import type { Mode, Tab, Tabs } from "./tabs";
 
+/** Left by an update for the relaunch that follows; read once. */
 export const SESSION_KEY = "mdwisp.relaunch";
+/** The window as it last was, for the next ordinary launch. */
+export const LAST_SESSION_KEY = "mdwisp.session";
 
 export interface SessionTab {
   path: string;
@@ -21,6 +25,8 @@ export interface SessionTab {
   position?: number;
   /** WYSIWYG: text of the block holding the cursor. */
   anchor?: string;
+  /** The preview tab (see tabs.ts). */
+  preview?: boolean;
 }
 
 export interface Session {
@@ -54,31 +60,46 @@ export function captureSession({ tabs, viewer, zoom }: SessionSurface): Session 
 
 function describe(tab: Tab, scrollTop: number | undefined): SessionTab {
   const entry: SessionTab = { path: tab.path ?? "", mode: tab.mode };
+  if (tab.preview) entry.preview = true;
   if (tab.mode === "source" && tab.source) entry.position = tab.source.cursorLine();
   else if (tab.mode === "wysiwyg" && tab.wysiwyg) entry.anchor = tab.wysiwyg.cursorBlockText();
   else if (tab.mode === "view" && scrollTop !== undefined && scrollTop > 0) entry.position = scrollTop;
   return entry;
 }
 
+export interface RestoreOptions {
+  /** Skip documents that can no longer be opened instead of reporting them. */
+  quiet?: boolean;
+  /**
+   * The `extra` paths are what the user just asked for (a double-click in
+   * the file manager): the last of them ends up in front, whether or not
+   * it was part of the snapshot. Without this the snapshot's own front
+   * tab wins, which is right after an update, where `extra` only repeats
+   * the snapshot.
+   */
+  extraInFront?: boolean;
+}
+
 /**
  * Reopens the documents of a snapshot, in order, with their modes and
- * positions, then any `extra` paths not already covered (the command line
- * of the relaunch names the same files; this keeps the two in step without
- * opening anything twice). Documents that no longer exist are reported
- * through the tabs' usual error path and skipped.
+ * positions, then any `extra` paths not already covered: the files the
+ * launch itself was given. Nothing opens twice. Documents that can no
+ * longer be opened are skipped, reported through the tabs' usual error
+ * path unless `quiet`.
  */
 export async function restoreSession(
   session: Session,
   extra: string[],
   { tabs, viewer }: Omit<SessionSurface, "zoom">,
   setZoom: (zoom: number) => void,
+  { quiet = false, extraInFront = false }: RestoreOptions = {},
 ): Promise<void> {
   setZoom(session.zoom);
   // Aligned with `session.tabs`, so `session.active` still points right
   // when a document in between could not be opened.
   const opened: Array<Tab | undefined> = [];
   for (const entry of session.tabs) {
-    await tabs.open([entry.path]);
+    await tabs.open([entry.path], { preview: entry.preview === true, quiet });
     const tab = tabs.current;
     if (!tab || tab.path !== entry.path) {
       opened.push(undefined);
@@ -88,11 +109,21 @@ export async function restoreSession(
     if (entry.mode !== "view") await tabs.setMode(entry.mode);
     place(tab, entry, viewer);
   }
+  if (extraInFront && extra.length > 0) {
+    // Opening a document that is already there brings it forward.
+    await tabs.open(extra);
+    return;
+  }
   const seen = new Set(session.tabs.map((t) => t.path));
   const rest = extra.filter((p) => !seen.has(p));
   if (rest.length) await tabs.open(rest);
   const active = session.active >= 0 ? opened[session.active] : undefined;
-  if (active) tabs.activate(active);
+  const entry = session.tabs[session.active];
+  if (!active || !entry) return;
+  tabs.activate(active);
+  // The documents share one scroller: opening the later ones moved it, so
+  // the front document is put back where it was once it is in front.
+  place(active, entry, viewer);
 }
 
 function place(tab: Tab, entry: SessionTab, viewer: HTMLElement): void {
@@ -111,11 +142,30 @@ function place(tab: Tab, entry: SessionTab, viewer: HTMLElement): void {
   }
 }
 
-export function saveSession(session: Session): void {
+export function saveSession(session: Session, key = SESSION_KEY): void {
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    localStorage.setItem(key, JSON.stringify(session));
   } catch {
     // Without storage the relaunch still gets the paths on its command line.
+  }
+}
+
+/** The snapshot kept for the next ordinary launch, left in place. */
+export function readLastSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(LAST_SESSION_KEY);
+    return raw === null ? null : parseSession(raw);
+  } catch {
+    return null;
+  }
+}
+
+/** Forgets the snapshot kept for the next launch (reopening was switched off). */
+export function forgetLastSession(): void {
+  try {
+    localStorage.removeItem(LAST_SESSION_KEY);
+  } catch {
+    // Nothing was stored.
   }
 }
 
@@ -150,6 +200,7 @@ export function parseSession(raw: string): Session | null {
     const entry: SessionTab = { path: t["path"], mode };
     if (typeof t["position"] === "number" && Number.isFinite(t["position"]) && t["position"] > 0) entry.position = t["position"];
     if (typeof t["anchor"] === "string" && t["anchor"]) entry.anchor = t["anchor"];
+    if (t["preview"] === true) entry.preview = true;
     tabs.push(entry);
   }
   const active = typeof obj["active"] === "number" && obj["active"] >= 0 && obj["active"] < tabs.length ? obj["active"] : -1;

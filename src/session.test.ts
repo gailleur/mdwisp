@@ -6,7 +6,17 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { captureSession, parseSession, restoreSession, saveSession, SESSION_KEY, takeSession } from "./session";
+import {
+  captureSession,
+  forgetLastSession,
+  LAST_SESSION_KEY,
+  parseSession,
+  readLastSession,
+  restoreSession,
+  saveSession,
+  SESSION_KEY,
+  takeSession,
+} from "./session";
 import { Tabs, type LoadedDocument, type Tab, type TabHost } from "./tabs";
 
 const FILES = new Map<string, string>([
@@ -15,7 +25,7 @@ const FILES = new Map<string, string>([
   ["/docs/c.md", "# C\n"],
 ]);
 
-function makeHost(): TabHost {
+function makeHost(overrides: Partial<TabHost> = {}): TabHost {
   return {
     load: async (path: string): Promise<LoadedDocument> => {
       const text = FILES.get(path);
@@ -34,6 +44,7 @@ function makeHost(): TabHost {
     onActiveChange: () => {},
     onTabStateChange: () => {},
     onError: () => {},
+    ...overrides,
   };
 }
 
@@ -106,6 +117,77 @@ describe("session", () => {
     await restoreSession(session, ["/docs/c.md", "/docs/a.md"], { tabs, viewer }, () => {});
     expect(tabs.all.map((t) => t.path)).toEqual(["/docs/c.md", "/docs/a.md"]);
     expect(tabs.current?.path).toBe("/docs/c.md");
+  });
+
+  it("puts a file the launch was asked for in front even when the snapshot already holds it", async () => {
+    const session = {
+      tabs: [{ path: "/docs/a.md", mode: "view" as const }, { path: "/docs/b.md", mode: "view" as const }, { path: "/docs/c.md", mode: "view" as const }],
+      active: 0,
+      zoom: 1,
+    };
+    const first = mount();
+    const launched = new Tabs(first.strip, first.viewer, makeHost());
+    await restoreSession(session, ["/docs/b.md"], { tabs: launched, viewer: first.viewer }, () => {}, { extraInFront: true });
+    expect(launched.all.map((t) => t.path)).toEqual(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    expect(launched.current?.path).toBe("/docs/b.md");
+
+    // After an update the same paths only repeat the snapshot: its own front tab stays.
+    const second = mount();
+    const relaunched = new Tabs(second.strip, second.viewer, makeHost());
+    await restoreSession(session, ["/docs/a.md", "/docs/b.md", "/docs/c.md"], { tabs: relaunched, viewer: second.viewer }, () => {});
+    expect(relaunched.current?.path).toBe("/docs/a.md");
+  });
+
+  it("puts the front document back at its place after the later ones have opened", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost());
+    const session = {
+      tabs: [{ path: "/docs/a.md", mode: "view" as const, position: 240 }, { path: "/docs/b.md", mode: "view" as const }],
+      active: 0,
+      zoom: 1,
+    };
+    await restoreSession(session, [], { tabs, viewer }, () => {});
+    // Opening b.md happened after a.md was placed; a.md must be placed again.
+    viewer.scrollTop = 0;
+    await restoreSession(session, [], { tabs, viewer }, () => {});
+    expect(tabs.current?.path).toBe("/docs/a.md");
+    expect(viewer.scrollTop).toBe(240);
+  });
+
+  it("stays quiet about documents that are gone when asked to", async () => {
+    const { strip, viewer } = mount();
+    const onError = vi.fn();
+    const tabs = new Tabs(strip, viewer, makeHost({ onError }));
+    const session = { tabs: [{ path: "/docs/missing.md", mode: "view" as const }, { path: "/docs/b.md", mode: "view" as const }], active: 0, zoom: 1 };
+    await restoreSession(session, [], { tabs, viewer }, () => {}, { quiet: true });
+    expect(tabs.all.map((t) => t.path)).toEqual(["/docs/b.md"]);
+    expect(onError).not.toHaveBeenCalled();
+    await restoreSession(session, [], { tabs, viewer }, () => {});
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a snapshot for the next launch apart from the one an update leaves, and brings the preview tab back as one", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost());
+    await tabs.open(["/docs/a.md"]);
+    await tabs.open(["/docs/b.md"], { preview: true });
+    const session = captureSession({ tabs, viewer, zoom: () => 1 });
+    expect(session.tabs).toEqual([{ path: "/docs/a.md", mode: "view" }, { path: "/docs/b.md", mode: "view", preview: true }]);
+
+    expect(readLastSession()).toBeNull();
+    saveSession(session, LAST_SESSION_KEY);
+    expect(takeSession()).toBeNull();
+    // Unlike the update's snapshot, this one is not used up by reading it.
+    expect(readLastSession()).toEqual(session);
+    expect(readLastSession()).toEqual(session);
+
+    const next = mount();
+    const again = new Tabs(next.strip, next.viewer, makeHost());
+    await restoreSession(readLastSession()!, [], { tabs: again, viewer: next.viewer }, () => {});
+    expect(again.all.map((t) => t.preview)).toEqual([false, true]);
+
+    forgetLastSession();
+    expect(readLastSession()).toBeNull();
   });
 
   it("rejects malformed snapshots and tolerates odd fields", () => {

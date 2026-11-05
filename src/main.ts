@@ -4,16 +4,20 @@
 import "katex/dist/katex.min.css";
 import "./styles.css";
 
+import { COMMANDS, FORMAT_PREFIX, PALETTE_ID, type ActionId } from "./commands";
 import { Explorer } from "./explorer";
 import { FindBar } from "./find";
 import { BLOCK_LABEL, type FormatKind } from "./format";
 import { keysFor, openHelp, type HelpPanel } from "./help";
+import { rangeForLine } from "./locate";
 import { Outline } from "./outline";
+import { openPalette, type Palette, type PaletteItem } from "./palette";
 import { openBlockPicker, type Picker } from "./picker";
 import { isExternalHref, isMarkdownHref, resolveRelative } from "./render";
+import { splitPath, type SearchHit } from "./search";
+import { LAST_SESSION_KEY, captureSession, forgetLastSession, readLastSession, restoreSession, saveSession, takeSession } from "./session";
 import * as shell from "./shell";
 import { Tabs, type Mode, type Tab } from "./tabs";
-import { captureSession, restoreSession, saveSession, takeSession } from "./session";
 import { createThemeButton, Theme } from "./theme";
 
 const REMOTE_IMAGES_KEY = "mdwisp.remoteImages";
@@ -23,6 +27,10 @@ const OUTLINE_WIDTH_KEY = "mdwisp.outlineWidth";
 const FILES_KEY = "mdwisp.files";
 const FILES_WIDTH_KEY = "mdwisp.filesWidth";
 const FOLDER_KEY = "mdwisp.folder";
+const PREVIEW_TABS_KEY = "mdwisp.previewTabs";
+const RESTORE_KEY = "mdwisp.restore";
+/** Commands run from the palette most recently, listed first next time. */
+const RECENT_COMMANDS = 5;
 const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 const MODE_LABEL: Record<Mode, string> = { view: "reading", wysiwyg: "editing", source: "source" };
 const MODE_KEY: Record<Mode, string> = { view: "⌘1", wysiwyg: "⌘2", source: "⌘3" };
@@ -206,6 +214,9 @@ async function installUpdate(version: string): Promise<void> {
     showAppBanner(`Installing mdwisp ${version}… the app will relaunch.`, []);
   } catch (error) {
     unlisten();
+    // No relaunch follows: the snapshot left for it must not be what the
+    // next ordinary launch finds.
+    takeSession();
     showAppBanner(`Could not install the update: ${String(error)}`, [
       ["download", () => void shell.openExternal(DOWNLOAD_PAGE)],
       ["close", hideAppBanner],
@@ -397,6 +408,8 @@ function boot(): void {
   let autosave = readFlag(AUTOSAVE_KEY, false);
   let outlineOpen = readFlag(OUTLINE_KEY, false);
   let filesOpen = readFlag(FILES_KEY, false);
+  let previewTabs = readFlag(PREVIEW_TABS_KEY, true);
+  let restoreOnLaunch = readFlag(RESTORE_KEY, true);
   let zoomIndex = ZOOM_STEPS.indexOf(1);
 
   // Files sidebar: the tree of one folder, leftmost. The folder is kept
@@ -404,7 +417,10 @@ function boot(): void {
   const explorer = new Explorer({
     list: shell.listFolder,
     watch: shell.watchDir,
-    openFile: (path) => void tabs.open([path]),
+    openFile: (path, preview) => void tabs.open([path], { preview: preview && previewTabs }),
+    search: shell.searchFolder,
+    cancelSearch: shell.cancelSearch,
+    openHit: (path, hit, query) => void openHit(path, hit, query),
     pickFolder: () => void openFolder(),
     closeFolder: () => void setFolder(null),
     onResize: (width) => writeNumber(FILES_WIDTH_KEY, width),
@@ -459,6 +475,8 @@ function boot(): void {
     shell.setMenuChecked("autosave", autosave);
     shell.setMenuChecked("outline", outlineOpen);
     shell.setMenuChecked("remote-images", allowRemoteImages);
+    shell.setMenuChecked("preview-tabs", previewTabs);
+    shell.setMenuChecked("restore-session", restoreOnLaunch);
   };
   const modeButton = el("button", "status__button status__button--mode");
   modeButton.type = "button";
@@ -488,6 +506,10 @@ function boot(): void {
     picker = null;
   };
 
+  // The command palette and "go to file": one panel, two sets of items.
+  let overlay: { kind: "commands" | "files"; panel: Palette } | null = null;
+  const closeOverlay = () => overlay?.panel.close();
+
   let help: HelpPanel | null = null;
   const toggleHelp = () => {
     if (help) {
@@ -495,6 +517,7 @@ function boot(): void {
       return;
     }
     closePopup();
+    closeOverlay();
     help = openHelp(isMac, {
       onClose: () => {
         help = null;
@@ -544,6 +567,25 @@ function boot(): void {
     void explorer.reveal(tab?.path ?? null);
     const name = tab ? (tab.mode === "view" ? tab.title : tab.name) : null;
     void shell.setWindowTitle(name ? `${tab?.dirty ? "• " : ""}${name} — mdwisp` : "mdwisp");
+    scheduleSession();
+  };
+
+  // The window as it stands is written down shortly after it changes, so
+  // the next launch can reopen it. Nothing is written before this launch
+  // has put its own documents back, or the snapshot would be lost.
+  let sessionReady = false;
+  /** Set while the window is asking about unsaved documents on its way out. */
+  let sessionHeld = false;
+  let sessionTimer: number | null = null;
+  const storeSession = () => {
+    if (sessionTimer) window.clearTimeout(sessionTimer);
+    sessionTimer = null;
+    if (sessionReady && restoreOnLaunch && !sessionHeld) saveSession(captureSession(surface), LAST_SESSION_KEY);
+  };
+  const scheduleSession = () => {
+    if (!sessionReady || !restoreOnLaunch || sessionHeld) return;
+    if (sessionTimer) window.clearTimeout(sessionTimer);
+    sessionTimer = window.setTimeout(storeSession, 400);
   };
 
   let outlineTimer: number | null = null;
@@ -570,7 +612,9 @@ function boot(): void {
     onActiveChange: reflect,
     onTabStateChange: (tab) => {
       if (tab === tabs.current) reflect(tab);
+      else scheduleSession();
     },
+    onListChange: () => scheduleSession(),
     onEdit: scheduleOutline,
     onFolderUnreadable: (tab) => offerFolderAccess(tab, () => tabs.rerenderAll()),
     onError: reportError,
@@ -592,6 +636,21 @@ function boot(): void {
     writeFlag(AUTOSAVE_KEY, autosave);
     reflectToggles();
     toast(autosave ? "autosave: on" : "autosave: off");
+  };
+  const togglePreviewTabs = () => {
+    previewTabs = !previewTabs;
+    writeFlag(PREVIEW_TABS_KEY, previewTabs);
+    if (!previewTabs) tabs.pinAll();
+    reflectToggles();
+    toast(previewTabs ? "preview tabs: on" : "preview tabs: off");
+  };
+  const toggleRestore = () => {
+    restoreOnLaunch = !restoreOnLaunch;
+    writeFlag(RESTORE_KEY, restoreOnLaunch);
+    if (restoreOnLaunch) storeSession();
+    else forgetLastSession();
+    reflectToggles();
+    toast(restoreOnLaunch ? "reopen documents at launch: on" : "reopen documents at launch: off");
   };
   filesButton.addEventListener("click", toggleFiles);
   outlineButton.addEventListener("click", toggleOutline);
@@ -624,6 +683,7 @@ function boot(): void {
   const setZoom = (index: number) => {
     zoomIndex = Math.min(Math.max(index, 0), ZOOM_STEPS.length - 1);
     (viewer.style as CSSStyleDeclaration & { zoom: string }).zoom = String(ZOOM_STEPS[zoomIndex] ?? 1);
+    scheduleSession();
   };
 
   const findAction = (step: 0 | 1 | -1) => {
@@ -672,7 +732,132 @@ function boot(): void {
     }
   };
 
-  const actions: Record<string, () => void> = {
+  // A result of find-in-folder: bring its document forward and land on
+  // the line. The source editor goes to the line itself; the rendered
+  // views show the match through the find bar, which then steps on with
+  // the usual keys.
+  const openHit = async (path: string, hit: SearchHit, query: string) => {
+    await tabs.open([path]);
+    const tab = tabs.current;
+    if (!tab || tab.path !== path) return;
+    if (tab.mode === "source" && tab.source) {
+      tab.source.goToLine(hit.line);
+      return;
+    }
+    if (tab.mode === "wysiwyg" && find.requiresDomMutation) return;
+    const lineCount = tabs.textOf(tab).split("\n").length;
+    find.show(query, (ranges) => rangeForLine(ranges, hit.text, hit.line, lineCount));
+  };
+
+  const searchFolder = () => {
+    if (!filesOpen) toggleFiles();
+    if (!explorer.folder) {
+      toast(keysFor("open a folder (⌘⇧O) to search in it", isMac));
+      return;
+    }
+    // A word selected in the document is most likely what is wanted.
+    const selected = window.getSelection()?.toString().trim() ?? "";
+    explorer.setSearching(true, selected && selected.length <= 80 && !selected.includes("\n") ? selected : undefined);
+  };
+
+  // Go to file: the open documents, then every Markdown file of the open
+  // folder. The list of the folder is kept from one use to the next, shown
+  // at once, and read again behind the panel each time it opens.
+  let fileIndex: (shell.FolderIndex & { root: string }) | null = null;
+  const fileItems = (): PaletteItem[] => {
+    const folder = explorer.folder;
+    const sep = (folder?.path ?? "").includes("\\") ? "\\" : "/";
+    const seen = new Set<string>();
+    const items: PaletteItem[] = [];
+    const add = (path: string) => {
+      if (seen.has(path)) return;
+      seen.add(path);
+      const inFolder = folder !== null && path.startsWith(folder.path + sep);
+      const { name, dir } = splitPath(inFolder ? folder.path : "", path);
+      const where = inFolder ? dir.replace(/\\/g, "/") : displayPath(dir, 48);
+      items.push(where ? { id: path, label: name, detail: where } : { id: path, label: name });
+    };
+    for (const tab of tabs.all) if (tab.path) add(tab.path);
+    if (folder && fileIndex?.root === folder.path) {
+      for (const relative of fileIndex.files) add(`${folder.path}${sep}${relative}`);
+    }
+    return items;
+  };
+  const fileNote = (): string => {
+    const folder = explorer.folder;
+    if (!folder) return keysFor("open documents only · open a folder (⌘⇧O) to reach its files", isMac);
+    if (fileIndex?.root !== folder.path) return `listing ${folder.name}…`;
+    const count = fileIndex.files.length.toLocaleString();
+    return fileIndex.truncated ? `first ${count} Markdown files in ${folder.name}` : `${count} Markdown files in ${folder.name}`;
+  };
+  const openQuickOpen = () => {
+    const again = overlay?.kind === "files";
+    closeOverlay();
+    if (again) return;
+    closePopup();
+    help?.close();
+    const folder = explorer.folder;
+    const panel = openPalette({
+      label: "Go to file",
+      placeholder: folder ? `go to file in ${folder.name}` : "go to an open document",
+      items: fileItems(),
+      joiner: "/",
+      note: fileNote(),
+      onPick: (item) => void tabs.open([item.id]),
+      onClose: () => {
+        overlay = null;
+      },
+    });
+    overlay = { kind: "files", panel };
+    if (!folder) return;
+    shell
+      .indexFolder(folder.path)
+      .then((index) => {
+        fileIndex = { ...index, root: folder.path };
+        if (overlay?.panel !== panel) return;
+        panel.setItems(fileItems());
+        panel.setNote(fileNote());
+      })
+      .catch((error: unknown) => {
+        if (overlay?.panel === panel) panel.setNote(`could not list ${folder.name}: ${String(error)}`);
+      });
+  };
+
+  let recentCommands: string[] = [];
+  const openCommandPalette = () => {
+    const again = overlay?.kind === "commands";
+    closeOverlay();
+    if (again) return;
+    closePopup();
+    help?.close();
+    const recent = recentCommands.flatMap((id) => COMMANDS.find((command) => command.id === id) ?? []);
+    const ordered = [...recent, ...COMMANDS.filter((command) => !recentCommands.includes(command.id))];
+    const panel = openPalette({
+      label: "Command palette",
+      placeholder: "run a command",
+      items: ordered.map((command) => ({
+        id: command.id,
+        label: command.title,
+        detail: command.group,
+        ...("keys" in command ? { keys: keysFor(command.keys, isMac) } : {}),
+      })),
+      onPick: (item) => {
+        recentCommands = [item.id, ...recentCommands.filter((id) => id !== item.id)].slice(0, RECENT_COMMANDS);
+        run(item.id);
+      },
+      onClose: () => {
+        overlay = null;
+      },
+    });
+    overlay = { kind: "commands", panel };
+  };
+
+  const actions: Record<ActionId | typeof PALETTE_ID, () => void> = {
+    [PALETTE_ID]: openCommandPalette,
+    "quick-open": openQuickOpen,
+    "search-folder": searchFolder,
+    "preview-tabs": togglePreviewTabs,
+    "restore-session": toggleRestore,
     new: () => void tabs.newDocument(),
     open: () => void openPicker(),
     "open-folder": () => void openFolder(),
@@ -705,6 +890,14 @@ function boot(): void {
     "zoom-in": () => setZoom(zoomIndex + 1),
     "zoom-out": () => setZoom(zoomIndex - 1),
     "zoom-reset": () => setZoom(ZOOM_STEPS.indexOf(1)),
+  };
+  /** Runs a menu, shortcut or palette command by its id. */
+  const run = (id: string) => {
+    // A command given by menu or shortcut while the palette is up replaces
+    // it; the two that open a palette handle that themselves.
+    if (id !== PALETTE_ID && id !== "quick-open") closeOverlay();
+    if (id.startsWith(FORMAT_PREFIX)) void applyFormat(id.slice(FORMAT_PREFIX.length) as FormatKind);
+    else (actions as Record<string, (() => void) | undefined>)[id]?.();
   };
 
   // Delegated reading-view interactions: links and code-copy buttons.
@@ -758,9 +951,13 @@ function boot(): void {
       if (tab?.mode === "view") outline.setActive(tabs.activeOutlineIndex(tab));
     });
   });
+  viewer.addEventListener("scroll", scheduleSession, { passive: true });
   document.addEventListener("selectionchange", () => {
     const tab = tabs.current;
-    if (tab && tab.mode !== "view") refreshCursorState();
+    if (!tab || tab.mode === "view") return;
+    refreshCursorState();
+    // Where the cursor is belongs to the session as the scroll position does.
+    scheduleSession();
   });
 
   const flash = (button: HTMLButtonElement, state: "copied" | "failed") => {
@@ -774,7 +971,10 @@ function boot(): void {
 
   // Keyboard fallbacks for when the native menu does not intercept.
   document.addEventListener("keydown", (event) => {
-    const mod = event.metaKey || event.ctrlKey;
+    // Only the platform's own command key. Control on a Mac moves the
+    // cursor in the editors (Ctrl+P, Ctrl+N, Ctrl+F), and AltGr, which
+    // arrives as Ctrl+Alt on Windows, types characters.
+    const mod = isMac ? event.metaKey : event.ctrlKey && !event.getModifierState("AltGraph");
     if (!mod) return;
     const key = event.key.toLowerCase();
     if (event.altKey && /^[0-6]$/.test(key)) {
@@ -792,8 +992,15 @@ function boot(): void {
       toggleFiles();
       return;
     }
+    // With Option held the key itself is a symbol on a Mac; go by position.
+    if (event.altKey && event.code === "KeyP") {
+      event.preventDefault();
+      run("print");
+      return;
+    }
     const id =
-      key === "f" ? "find" :
+      key === "f" ? (event.shiftKey ? "search-folder" : "find") :
+      key === "p" ? (event.shiftKey ? PALETTE_ID : "quick-open") :
       key === "g" ? (event.shiftKey ? "find-prev" : "find-next") :
       key === "n" ? "new" :
       key === "o" ? (event.shiftKey ? "open-folder" : "open") :
@@ -811,15 +1018,28 @@ function boot(): void {
       null;
     if (!id) return;
     event.preventDefault();
-    actions[id]?.();
+    run(id);
   });
 
-  void shell.onMenu((id) => {
-    if (id.startsWith("fmt-")) void applyFormat(id.slice(4) as FormatKind);
-    else actions[id]?.();
-  });
+  void shell.onMenu(run);
   void shell.onDrop((paths) => void tabs.open(paths.filter(isMarkdownPath)));
-  void shell.onCloseRequested(() => tabs.confirmCloseAll());
+  void shell.onCloseRequested(async () => {
+    // Asking about unsaved documents brings each of them to the front;
+    // the window is remembered as it was before the questions.
+    storeSession();
+    sessionHeld = true;
+    const closing = await tabs.confirmCloseAll();
+    if (!closing) {
+      sessionHeld = false;
+      scheduleSession();
+    }
+    return closing;
+  });
+  // Quitting does not always close the window first; these do fire.
+  window.addEventListener("pagehide", storeSession);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") storeSession();
+  });
   const surface = { tabs, viewer, zoom: () => ZOOM_STEPS[zoomIndex] ?? 1 };
   const setZoomFactor = (factor: number) => {
     const index = ZOOM_STEPS.findIndex((step) => Math.abs(step - factor) < 0.001);
@@ -836,9 +1056,17 @@ function boot(): void {
     .onOpenFiles((paths) => void tabs.open(paths))
     .then(() => shell.takePendingFiles())
     .then(async (paths) => {
-      const session = takeSession();
-      if (session) await restoreSession(session, paths, surface, setZoomFactor);
+      // After an update: exactly what was open. Otherwise what the last
+      // run left, if wanted, with the files this launch was given on top.
+      const relaunch = takeSession();
+      const last = restoreOnLaunch ? readLastSession() : null;
+      if (relaunch) await restoreSession(relaunch, paths, surface, setZoomFactor);
+      else if (last && last.tabs.length > 0) await restoreSession(last, paths, surface, setZoomFactor, { quiet: true, extraInFront: true });
       else await tabs.open(paths);
+    })
+    .finally(() => {
+      sessionReady = true;
+      scheduleSession();
     });
 
   reflect(null);

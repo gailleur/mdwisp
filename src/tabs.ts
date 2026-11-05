@@ -45,7 +45,19 @@ export interface TabHost {
   onFolderUnreadable?: (tab: Tab) => void;
   /** The tabs were put in a different order (drag, or `move`). */
   onReorder?: () => void;
+  /** A tab was added, removed or moved. */
+  onListChange?: () => void;
   onError: (message: string) => void;
+}
+
+export interface OpenOptions {
+  /**
+   * Open as the preview tab: a passing look at a document, shown in italics,
+   * which the next preview replaces. See `Tabs.pin` for what keeps it.
+   */
+  preview?: boolean;
+  /** Skip documents that cannot be opened instead of reporting them. */
+  quiet?: boolean;
 }
 
 export interface Tab {
@@ -60,6 +72,8 @@ export interface Tab {
   dirty: boolean;
   /** Set when the file changed on disk while there were unsaved edits. */
   conflict: boolean;
+  /** A preview tab: replaced by the next preview unless it is kept. */
+  preview: boolean;
   button: HTMLButtonElement;
   panel: HTMLElement;
   article: HTMLElement;
@@ -78,6 +92,8 @@ export class Tabs {
   private readonly tabs: Tab[] = [];
   private active: Tab | null = null;
   private untitledCount = 0;
+  /** Opens run one after the other, so one never overtakes or replaces a tab still loading. */
+  private opening: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly strip: HTMLElement,
@@ -97,6 +113,13 @@ export class Tabs {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button.tab");
       const tab = this.tabs.find((t) => t.button === button);
       if (tab) void this.close(tab);
+    });
+    strip.addEventListener("dblclick", (event) => {
+      const target = event.target as HTMLElement;
+      if (target.closest(".tab__close")) return;
+      const button = target.closest<HTMLButtonElement>("button.tab");
+      const tab = this.tabs.find((t) => t.button === button);
+      if (tab) this.pin(tab);
     });
     // Press selects at once; a sideways pull from there reorders.
     strip.addEventListener("pointerdown", (event) => {
@@ -177,29 +200,65 @@ export class Tabs {
     return lastIndexWhere(headings, (el) => el.offsetTop <= top);
   }
 
-  async open(paths: string[]): Promise<void> {
+  /**
+   * Opens documents as tabs, the last one in front. A document already
+   * open is brought forward rather than opened twice.
+   */
+  open(paths: string[], options: OpenOptions = {}): Promise<void> {
+    const run = () => this.openNow(paths, options);
+    this.opening = this.opening.then(run, run);
+    return this.opening;
+  }
+
+  private async openNow(paths: string[], options: OpenOptions): Promise<void> {
+    const bringForward = (tab: Tab) => {
+      // Asking for a document outright keeps it, even if it was a preview.
+      if (!options.preview) this.pin(tab);
+      this.activate(tab);
+    };
     for (const path of paths) {
       const existing = this.tabs.find((t) => t.path === path);
       if (existing) {
-        this.activate(existing);
+        bringForward(existing);
         continue;
       }
       try {
         const doc = await this.host.load(path);
         const canonical = this.tabs.find((t) => t.path === doc.path);
         if (canonical) {
-          this.activate(canonical);
+          bringForward(canonical);
           continue;
         }
         const tab = this.createTab(doc.path, doc.name, doc.dir, doc.text);
         tab.sandboxed = doc.sandboxed === true;
-        this.mount(tab);
+        // A preview takes the place of the previous one, in the same spot.
+        const replaced = options.preview ? this.tabs.find((t) => t.preview && !t.dirty) : undefined;
+        if (options.preview) this.setPreview(tab, true);
+        this.mount(tab, replaced ? this.tabs.indexOf(replaced) : undefined);
+        if (replaced) await this.close(replaced);
         await this.showMode(tab, "view", { restoreScroll: false });
         tab.unwatch = await this.host.watch(doc.path, () => void this.onDiskChange(tab));
       } catch (error) {
-        this.host.onError(`${path}\n${describe(error)}`);
+        if (!options.quiet) this.host.onError(`${path}\n${describe(error)}`);
       }
     }
+  }
+
+  /**
+   * Keeps a preview tab: it becomes an ordinary tab. Called on a
+   * double-click on the tab or the file, on the first edit, when the tab
+   * is dragged to another place, and when the document is asked for
+   * outright (the Open dialog, go to file, a search result).
+   */
+  pin(tab: Tab): void {
+    if (!tab.preview) return;
+    this.setPreview(tab, false);
+    this.host.onTabStateChange(tab);
+  }
+
+  /** Keeps every preview tab (previews were switched off). */
+  pinAll(): void {
+    for (const tab of this.tabs) this.pin(tab);
   }
 
   async newDocument(): Promise<void> {
@@ -242,6 +301,7 @@ export class Tabs {
       if (next) this.activate(next);
       else this.host.onActiveChange(null);
     }
+    this.host.onListChange?.();
     return true;
   }
 
@@ -259,7 +319,9 @@ export class Tabs {
     this.tabs.splice(to, 0, tab);
     const next = this.tabs[to + 1];
     this.strip.insertBefore(tab.button, next ? next.button : null);
+    this.pin(tab);
     this.host.onReorder?.();
+    this.host.onListChange?.();
   }
 
   /** Returns true when every tab agreed to close (used before quitting). */
@@ -454,17 +516,26 @@ export class Tabs {
 
     const baseline = normalise(raw);
     return {
-      path, name, dir, sandboxed: false, title: name, mode: "view", dirty: false, conflict: false,
+      path, name, dir, sandboxed: false, title: name, mode: "view", dirty: false, conflict: false, preview: false,
       button, panel, article, banner, text: baseline.text, baseline,
       wysiwyg: null, source: null, unwatch: null, busy: null, autosaveTimer: null,
     };
   }
 
-  private mount(tab: Tab): void {
-    this.tabs.push(tab);
-    this.strip.appendChild(tab.button);
+  /** Adds a tab to the strip, at `index` if given, else at the end, and shows it. */
+  private mount(tab: Tab, index?: number): void {
+    const before = index === undefined ? undefined : this.tabs[index];
+    if (before) this.tabs.splice(index!, 0, tab);
+    else this.tabs.push(tab);
+    this.strip.insertBefore(tab.button, before ? before.button : null);
     this.viewer.appendChild(tab.panel);
     this.activate(tab);
+    this.host.onListChange?.();
+  }
+
+  private setPreview(tab: Tab, on: boolean): void {
+    tab.preview = on;
+    tab.button.classList.toggle("tab--preview", on);
   }
 
   /** The buffer as it stands in whichever mode is active. */
@@ -566,6 +637,9 @@ export class Tabs {
 
   private onEdit(tab: Tab): void {
     this.updateDirty(tab);
+    // Editors also report changes they make themselves while loading;
+    // only a change that leaves the document edited keeps a preview.
+    if (tab.dirty) this.pin(tab);
     this.host.onEdit?.(tab);
     if (tab.dirty && tab.path && this.host.autosave() && !tab.conflict) {
       if (tab.autosaveTimer) window.clearTimeout(tab.autosaveTimer);

@@ -37,6 +37,23 @@ The Content Security Policy in `tauri.conf.json` backs all of this up at the
 browser level: no `connect-src` except Tauri IPC, no frames, no workers, no
 forms, scripts only from the bundle.
 
+## Folder walks
+
+The files sidebar lists one folder at a time and never walks the tree.
+"Go to file" and "find in folder" do have to, so they live apart in
+`src-tauri/src/folder.rs` and are held to a budget: they run on a blocking
+thread, only when asked, look at Markdown files only, skip hidden folders
+and `node_modules`, do not follow links to folders, and stop at fixed
+limits (entries visited, files listed, lines reported, file size). Nothing
+is indexed ahead of time or cached on disk. The file list is handed over
+in one answer and kept by the frontend, which shows the previous list at
+once and reads the folder again behind the panel. A search streams one
+message per matching file over a Tauri channel, so results appear while
+the walk is still going; each search carries an id, and a walk stops as
+soon as its id is no longer the current one, which is how typing replaces
+a search. Both commands refuse a folder the webview was not granted, as
+`list_folder` does.
+
 ## PDF export
 
 `src-tauri/src/pdf.rs` is the one place the shell touches the platform
@@ -101,17 +118,25 @@ the running app receives it as `RunEvent::Opened`.
 
 | Module | Role |
 | --- | --- |
-| `main.ts` | Boot: wire shell events, menu commands, drag-and-drop, tabs. |
+| `main.ts` | Boot: wire shell events, menu commands, drag-and-drop, tabs, the palette and the session. |
+| `commands.ts` | Every command with its menu, title and shortcut: the command palette's list, typed so that a command without a handler does not compile. |
 | `shell.ts` | The only module that imports Tauri APIs. Everything else is pure DOM/TS and runs in tests. |
-| `tabs.ts` | Document tabs and the per-tab state machine: mode (reading / editor / source), buffer, baseline, dirty, save, disk-change conflicts. |
+| `tabs.ts` | Document tabs and the per-tab state machine: mode (reading / editor / source), buffer, baseline, dirty, save, disk-change conflicts, preview tabs. Opens are queued so one never overtakes another. |
+| `session.ts` | Snapshot of the open documents (order, mode, position, zoom): one consumed by the relaunch after an update, one kept current for the next ordinary launch. |
 | `document.ts` | Pure text helpers: LF/CRLF normalisation, final-newline preservation, untitled names. |
 | `editor.ts` | Milkdown (ProseMirror) wrapper: pristine detection, image URL rewriting, task toggles, cursor anchoring. |
 | `source.ts` | CodeMirror 6 wrapper with Markdown highlighting and search panel. |
 | `format.ts` | Format action and block-type vocabulary shared by menu, shortcuts, status bar and both editors. |
 | `outline.ts` | Sidebar rendering plus the Markdown heading scanner used in source mode. |
+| `sidebar.ts` | What the left sidebars share: the resizable `<aside>`. |
+| `explorer.ts` | Files sidebar: the lazy tree of one folder, which turns into find-in-folder and back. |
+| `search.ts` | Find in folder: the field, the streamed results grouped by file, keyboard navigation. |
+| `locate.ts` | From a matching source line to the place it was rendered, so a search result lands on the right occurrence. |
+| `palette.ts` | The panel behind the command palette and "go to file": a field over a ranked list. |
+| `fuzzy.ts` | Fuzzy matching and scoring for the palette. |
 | `render.ts` | Markdown → sanitised HTML → DOM, then KaTeX, Mermaid, code-copy controls. |
 | `sanitize.ts` | DOMPurify configuration and hooks. Unit-tested against hostile input. |
-| `find.ts` | In-document search bar and highlighting. |
+| `find.ts` | In-document search bar and highlighting; also how a find-in-folder result is shown in its document. |
 | `theme.ts` | auto/light/dark with persistence. |
 | `styles.css` | All styling; tokens on `:root`, dark via `data-theme` and `prefers-color-scheme`. |
 

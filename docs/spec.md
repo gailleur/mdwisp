@@ -17,7 +17,31 @@ does, not how any other product does it. All implementation is original.
 - One window, multiple documents as tabs; drag a tab sideways to reorder.
   Closing the last tab leaves an empty window with an Open action; it does
   not quit the app on macOS.
+- Preview tabs: a single click on a file in the files sidebar (or Space on
+  it) opens the document as a preview, a tab with its title in italics.
+  There is at most one, and the next preview takes its place in the strip,
+  so browsing a folder does not pile up tabs. A preview becomes an ordinary
+  tab when it is kept: a double-click on the file or on the tab, Enter on
+  the file, the first edit, dragging the tab, or asking for the document
+  outright (Open, go to file, a search result, a link). *View ▸ Preview
+  Tabs* (on by default) switches previews off; every click then opens an
+  ordinary tab.
 - Window size and position persist between launches.
+- The documents persist too: a launch reopens the documents that were open
+  when the app quit, in the same order, each in the same view and at the
+  same place, with the same zoom and the same one in front. Files the
+  launch itself was asked to open (a double-click in the file manager) are
+  added and come to the front. Documents that no longer exist are skipped
+  silently; untitled documents are not kept. The snapshot is rewritten
+  shortly after the window changes, in local storage, and nowhere else.
+  *View ▸ Reopen Documents at Launch* (on by default) switches it off and
+  discards the snapshot. In the Mac App Store build only documents the
+  sandbox still lets the app read come back: those in the open folder or
+  in a folder granted for images.
+- Command palette (Cmd/Ctrl+Shift+P, *View ▸ Command Palette…*): a panel
+  listing every command of the menus by name, with its menu and shortcut;
+  typing filters by fuzzy match, Enter runs the highlighted command. The
+  commands run from it most recently are listed first.
 
 ## 2. Files
 
@@ -78,6 +102,29 @@ does, not how any other product does it. All implementation is original.
   (kept with a security-scoped bookmark in the App Store build), and the
   listing command refuses any path outside what was granted. The folder,
   the sidebar's visibility and its width persist.
+- Go to file (Cmd/Ctrl+P, *File ▸ Go to File…*): the same panel listing
+  the open documents and then every Markdown file under the open folder;
+  typing filters by fuzzy match on the name, or on the path when the
+  query needs it ("docs/sp"), and Enter opens the file. The folder is
+  listed by the shell in the background when the panel opens: the panel
+  appears at once with the previous list, and is refreshed when the new
+  one arrives. Hidden folders and `node_modules` are not listed, links
+  to folders are not followed, and the list stops at 20,000 files. With
+  no folder open it lists the open documents only.
+- Find in folder (Cmd/Ctrl+Shift+F, *Edit ▸ Find in Folder…*, or the
+  magnifier in the sidebar's header): the files sidebar shows a search
+  field in place of the tree. The search is literal and ignores case,
+  covers the Markdown files under the open folder (same exclusions as go
+  to file, and files over 4 MB), starts a moment after typing stops or on
+  Enter, and needs two characters. Matching lines arrive while the folder
+  is still being read, grouped by file with a count; a new search stops
+  the one under way. It reports at most 2,000 lines, 100 per file, and
+  says so when it stops short. Choosing a line opens the document and
+  lands on that line: in source mode by line number, in the reading view
+  and the editor by showing the match through the find bar, which then
+  steps through the document's other matches. A selection in the document
+  is taken as the query. Escape in the field returns to the tree, which
+  keeps its state, as the search keeps its results.
 - Outline: an optional left sidebar (⌘⌥S, View ▸ Outline Sidebar, or the outline button in the
   status bar) lists the document's headings with indentation. Clicking one
   jumps to it in whichever mode is active; the current section is
@@ -86,7 +133,8 @@ does, not how any other product does it. All implementation is original.
 - Headings carry stable ids (GitHub-style slugs) so `#anchor` links work.
 - Links to `http(s)` open in the system browser. `mailto:` and similar open
   their system handler. Links to other Markdown files open in a new tab.
-- Print via the system print dialog.
+- Print via the system print dialog (Cmd/Ctrl+Alt+P; Cmd/Ctrl+P is go to
+  file).
 - Export PDF (Cmd/Ctrl+Shift+E) writes the reading view straight to a file
   through the platform webview's own print-to-file path (AppKit, WebView2,
   WebKitGTK), with the same print stylesheet as Print. No dialog beyond the

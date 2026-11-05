@@ -56,6 +56,9 @@ jobs:
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - run: pnpm install --frozen-lockfile
       - run: pnpm tauri build --ci
+      # After the build: the shell embeds the frontend bundle it produces.
+      - name: Shell unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
       - uses: actions/upload-artifact@v4
         with:
           name: mdwisp-${{ matrix.name }}

@@ -295,6 +295,116 @@ describe("Tab order", () => {
   });
 });
 
+describe("Preview tabs", () => {
+  let fs: FakeFs;
+
+  beforeEach(() => {
+    fs = { files: new Map([["/docs/a.md", "# A\n"], ["/docs/b.md", "# B\n"], ["/docs/c.md", "# C\n"], ["/docs/d.md", "# D\n"]]), watchers: new Map() };
+    Object.defineProperty(HTMLElement.prototype, "getClientRects", { value: () => [] as unknown as DOMRectList, configurable: true });
+    Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+    Range.prototype.getBoundingClientRect = () => new DOMRect();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  const names = (tabs: Tabs) => tabs.all.map((t) => t.name);
+  const previews = (tabs: Tabs) => tabs.all.filter((t) => t.preview).map((t) => t.name);
+
+  it("a preview is one italic tab that the next preview replaces, in the same place", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost(fs));
+    await tabs.open(["/docs/a.md"]);
+    await tabs.open(["/docs/b.md"], { preview: true });
+    await tabs.open(["/docs/c.md"]);
+    expect(names(tabs)).toEqual(["a.md", "b.md", "c.md"]);
+    expect(previews(tabs)).toEqual(["b.md"]);
+    expect(tabs.all[1]!.button.classList.contains("tab--preview")).toBe(true);
+
+    await tabs.open(["/docs/d.md"], { preview: true });
+    expect(names(tabs)).toEqual(["a.md", "d.md", "c.md"]);
+    expect(Array.from(strip.querySelectorAll(".tab__label")).map((el) => el.textContent)).toEqual(["A", "D", "C"]);
+    expect(previews(tabs)).toEqual(["d.md"]);
+    expect(tabs.current?.name).toBe("d.md");
+    // The replaced document is fully closed: no panel, no watcher left behind.
+    expect(viewer.querySelectorAll(".panel").length).toBe(3);
+    expect([...fs.watchers.keys()].sort()).toEqual(["/docs/a.md", "/docs/c.md", "/docs/d.md"]);
+  });
+
+  it("previews opened in quick succession still leave exactly one", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost(fs));
+    const all = [tabs.open(["/docs/a.md"], { preview: true }), tabs.open(["/docs/b.md"], { preview: true }), tabs.open(["/docs/c.md"], { preview: true })];
+    await Promise.all(all);
+    expect(names(tabs)).toEqual(["c.md"]);
+    expect([...fs.watchers.keys()]).toEqual(["/docs/c.md"]);
+    expect(viewer.querySelector("h1")?.textContent).toBe("C");
+  });
+
+  it("is kept by a double-click on the tab, by asking for the document outright, and by dragging it", async () => {
+    const { strip, viewer } = mount();
+    const onTabStateChange = vi.fn();
+    const tabs = new Tabs(strip, viewer, makeHost(fs, { onTabStateChange }));
+
+    await tabs.open(["/docs/a.md"], { preview: true });
+    onTabStateChange.mockClear();
+    tabs.current!.button.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(previews(tabs)).toEqual([]);
+    expect(tabs.current!.button.classList.contains("tab--preview")).toBe(false);
+    expect(onTabStateChange).toHaveBeenCalledTimes(1);
+
+    await tabs.open(["/docs/b.md"], { preview: true });
+    await tabs.open(["/docs/b.md"], { preview: true }); // another look changes nothing
+    expect(previews(tabs)).toEqual(["b.md"]);
+    await tabs.open(["/docs/b.md"]);
+    expect(previews(tabs)).toEqual([]);
+
+    await tabs.open(["/docs/c.md"], { preview: true });
+    tabs.move(tabs.current as Tab, 0);
+    expect(names(tabs)).toEqual(["c.md", "a.md", "b.md"]);
+    expect(previews(tabs)).toEqual([]);
+  });
+
+  it("is kept by an edit, but not by merely switching to an editor", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost(fs));
+    await tabs.open(["/docs/a.md"], { preview: true });
+    await tabs.setMode("source");
+    const tab = tabs.current as Tab;
+    expect(tab.preview).toBe(true);
+    tab.source!.setText("# A\n\nedited\n");
+    expect(tab.dirty).toBe(true);
+    expect(tab.preview).toBe(false);
+
+    // An edited document is never the one a new preview replaces.
+    await tabs.open(["/docs/b.md"], { preview: true });
+    expect(names(tabs)).toEqual(["a.md", "b.md"]);
+  });
+
+  it("pinAll keeps every preview, and the list reports its changes", async () => {
+    const { strip, viewer } = mount();
+    const onListChange = vi.fn();
+    const tabs = new Tabs(strip, viewer, makeHost(fs, { onListChange }));
+    await tabs.open(["/docs/a.md"], { preview: true });
+    expect(onListChange).toHaveBeenCalledTimes(1);
+    tabs.pinAll();
+    expect(previews(tabs)).toEqual([]);
+    await tabs.open(["/docs/b.md"], { preview: true });
+    expect(names(tabs)).toEqual(["a.md", "b.md"]);
+    await tabs.close(tabs.all[0] as Tab);
+    expect(onListChange).toHaveBeenCalledTimes(3);
+  });
+
+  it("can stay quiet about a document that cannot be opened", async () => {
+    const { strip, viewer } = mount();
+    const onError = vi.fn();
+    const tabs = new Tabs(strip, viewer, makeHost(fs, { onError }));
+    await tabs.open(["/docs/missing.md", "/docs/a.md"], { quiet: true });
+    expect(names(tabs)).toEqual(["a.md"]);
+    expect(onError).not.toHaveBeenCalled();
+    await tabs.open(["/docs/missing.md"]);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+});
+
 async function flush(): Promise<void> {
   for (let i = 0; i < 5; i += 1) await new Promise((r) => setTimeout(r, 0));
 }
