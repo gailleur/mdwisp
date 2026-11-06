@@ -52,7 +52,7 @@ mod mac {
     use objc2::rc::Retained;
     use objc2::runtime::Bool;
     use objc2_foundation::{
-        NSData, NSString, NSURL, NSURLBookmarkCreationOptions, NSURLBookmarkResolutionOptions,
+        NSData, NSString, NSURLBookmarkCreationOptions, NSURLBookmarkResolutionOptions, NSURL,
     };
     use std::collections::BTreeMap;
     use std::path::Path;
@@ -111,7 +111,9 @@ mod mac {
         let map = load(store);
         let mut kept = Store::new();
         for (dir, encoded) in &map {
-            let Some(bytes) = unhex(encoded) else { continue };
+            let Some(bytes) = unhex(encoded) else {
+                continue;
+            };
             let data = NSData::with_bytes(&bytes);
             let mut stale = Bool::NO;
             // SAFETY: `stale` is a valid pointer for the duration of the call.
@@ -155,13 +157,17 @@ mod mac {
         if !super::active() {
             return Ok(());
         }
-        let url = NSURL::fileURLWithPath_isDirectory(&NSString::from_str(&dir.to_string_lossy()), true);
+        let url =
+            NSURL::fileURLWithPath_isDirectory(&NSString::from_str(&dir.to_string_lossy()), true);
         let data = make_bookmark(&url)?;
         if !hold(url) {
             return Err("The system refused access to that folder.".into());
         }
         let mut map = load(store);
-        map.insert(dir.to_string_lossy().into_owned(), hex(data.to_vec().as_slice()));
+        map.insert(
+            dir.to_string_lossy().into_owned(),
+            hex(data.to_vec().as_slice()),
+        );
         save(store, &map)
     }
 }

@@ -26,7 +26,9 @@ impl Outcome {
     pub fn message(&self) -> &'static str {
         match self {
             Outcome::Done => "mdwisp now opens Markdown files.",
-            Outcome::OpenedSettings => "Choose mdwisp for .md in the Default apps page that just opened.",
+            Outcome::OpenedSettings => {
+                "Choose mdwisp for .md in the Default apps page that just opened."
+            }
         }
     }
 }
@@ -72,7 +74,10 @@ mod platform {
             role: LSRolesMask,
             handler_bundle_id: CFStringRef,
         ) -> OSStatus;
-        fn LSCopyDefaultRoleHandlerForContentType(content_type: CFStringRef, role: LSRolesMask) -> CFStringRef;
+        fn LSCopyDefaultRoleHandlerForContentType(
+            content_type: CFStringRef,
+            role: LSRolesMask,
+        ) -> CFStringRef;
     }
 
     fn markdown_type() -> Option<objc2::rc::Retained<UTType>> {
@@ -84,7 +89,8 @@ mod platform {
         // SAFETY: a plain Launch Services read; the returned reference is
         // ours to release (copy rule).
         unsafe {
-            let current = LSCopyDefaultRoleHandlerForContentType(uti.as_concrete_TypeRef(), ROLES_ALL);
+            let current =
+                LSCopyDefaultRoleHandlerForContentType(uti.as_concrete_TypeRef(), ROLES_ALL);
             if current.is_null() {
                 return Some(false);
             }
@@ -110,19 +116,27 @@ mod platform {
             .URLForApplicationWithBundleIdentifier(&NSString::from_str(bundle_id))
             .ok_or("mdwisp is not installed as an application; copy it to Applications first.")?;
 
-        let modern = workspace.respondsToSelector(sel!(setDefaultApplicationAtURL:toOpenContentType:completionHandler:));
+        let modern = workspace.respondsToSelector(
+            sel!(setDefaultApplicationAtURL:toOpenContentType:completionHandler:),
+        );
         if !modern {
             // macOS 11: no consent dialog, Launch Services takes it directly.
             let uti = CFString::new(&uti.identifier().to_string());
             let handler = CFString::new(bundle_id);
             // SAFETY: plain Launch Services call with owned CFStrings.
             let status = unsafe {
-                LSSetDefaultRoleHandlerForContentType(uti.as_concrete_TypeRef(), ROLES_ALL, handler.as_concrete_TypeRef())
+                LSSetDefaultRoleHandlerForContentType(
+                    uti.as_concrete_TypeRef(),
+                    ROLES_ALL,
+                    handler.as_concrete_TypeRef(),
+                )
             };
             return if status == 0 {
                 tx.send(Ok(Outcome::Done)).map_err(|e| e.to_string())
             } else {
-                Err(format!("Launch Services refused the change (error {status})."))
+                Err(format!(
+                    "Launch Services refused the change (error {status})."
+                ))
             };
         }
 
@@ -136,7 +150,11 @@ mod platform {
             };
             let _ = tx.send(reply);
         });
-        workspace.setDefaultApplicationAtURL_toOpenContentType_completionHandler(&app_url, &uti, Some(&done));
+        workspace.setDefaultApplicationAtURL_toOpenContentType_completionHandler(
+            &app_url,
+            &uti,
+            Some(&done),
+        );
         Ok(())
     }
 }
@@ -164,11 +182,17 @@ mod platform {
     fn installed() -> bool {
         let mut dirs: Vec<PathBuf> = std::env::var_os("XDG_DATA_DIRS")
             .map(|v| std::env::split_paths(&v).collect())
-            .unwrap_or_else(|| vec![PathBuf::from("/usr/local/share"), PathBuf::from("/usr/share")]);
+            .unwrap_or_else(|| {
+                vec![
+                    PathBuf::from("/usr/local/share"),
+                    PathBuf::from("/usr/share"),
+                ]
+            });
         if let Some(home) = std::env::var_os("HOME") {
             dirs.push(PathBuf::from(home).join(".local/share"));
         }
-        dirs.iter().any(|d| d.join("applications").join(DESKTOP_FILE).is_file())
+        dirs.iter()
+            .any(|d| d.join("applications").join(DESKTOP_FILE).is_file())
     }
 
     pub fn is_default(_bundle_id: &str) -> Option<bool> {
@@ -179,7 +203,10 @@ mod platform {
             if line.starts_with('[') {
                 in_defaults = line == SECTION;
             } else if in_defaults {
-                if let Some(value) = line.strip_prefix(MIME).and_then(|r| r.trim_start().strip_prefix('=')) {
+                if let Some(value) = line
+                    .strip_prefix(MIME)
+                    .and_then(|r| r.trim_start().strip_prefix('='))
+                {
                     return Some(value.split(';').next().map(str::trim) == Some(DESKTOP_FILE));
                 }
             }
@@ -217,7 +244,11 @@ mod platform {
                 }
                 in_defaults = trimmed == SECTION;
                 seen_section |= in_defaults;
-            } else if in_defaults && trimmed.strip_prefix(MIME).map_or(false, |r| r.trim_start().starts_with('=')) {
+            } else if in_defaults
+                && trimmed
+                    .strip_prefix(MIME)
+                    .map_or(false, |r| r.trim_start().starts_with('='))
+            {
                 if !written {
                     out.push(entry.clone());
                     written = true;

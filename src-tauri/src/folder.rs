@@ -41,14 +41,20 @@ const LINE_LEAD_CHARS: usize = 60;
 /// folders without any Markdown can still be called off. Symbolic links to
 /// folders are not followed, so a link cannot make the walk loop. Returns
 /// true when the walk was cut short by the entry budget.
-fn walk_markdown(root: &Path, wanted: impl Fn() -> bool, mut visit: impl FnMut(&Path) -> bool) -> bool {
+fn walk_markdown(
+    root: &Path,
+    wanted: impl Fn() -> bool,
+    mut visit: impl FnMut(&Path) -> bool,
+) -> bool {
     let mut visited = 0usize;
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         if !wanted() {
             return false;
         }
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         let mut files: Vec<(String, PathBuf)> = Vec::new();
         let mut dirs: Vec<(String, PathBuf)> = Vec::new();
         for entry in entries.flatten() {
@@ -60,7 +66,9 @@ fn walk_markdown(root: &Path, wanted: impl Fn() -> bool, mut visit: impl FnMut(&
             if name.starts_with('.') {
                 continue;
             }
-            let Ok(kind) = entry.file_type() else { continue };
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
             let path = entry.path();
             if kind.is_dir() {
                 if !SKIPPED_DIRS.contains(&name.as_str()) {
@@ -108,17 +116,24 @@ pub struct Index {
 fn index(root: &Path) -> Index {
     let mut files = Vec::new();
     let mut full = false;
-    let cut = walk_markdown(root, || true, |path| {
-        if files.len() >= MAX_FILES {
-            full = true;
-            return false;
-        }
-        if let Ok(relative) = path.strip_prefix(root) {
-            files.push(relative.to_string_lossy().into_owned());
-        }
-        true
-    });
-    Index { files, truncated: cut || full }
+    let cut = walk_markdown(
+        root,
+        || true,
+        |path| {
+            if files.len() >= MAX_FILES {
+                full = true;
+                return false;
+            }
+            if let Ok(relative) = path.strip_prefix(root) {
+                files.push(relative.to_string_lossy().into_owned());
+            }
+            true
+        },
+    );
+    Index {
+        files,
+        truncated: cut || full,
+    }
 }
 
 /// Every Markdown file under an open folder, for "go to file".
@@ -175,7 +190,11 @@ fn snippet(line: &str, match_byte: usize) -> String {
     let start = before.saturating_sub(LINE_LEAD_CHARS);
     let window: String = trimmed.chars().skip(start).take(MAX_LINE_CHARS).collect();
     let prefix = if start > 0 { "…" } else { "" };
-    let suffix = if start + MAX_LINE_CHARS < trimmed.chars().count() { "…" } else { "" };
+    let suffix = if start + MAX_LINE_CHARS < trimmed.chars().count() {
+        "…"
+    } else {
+        ""
+    };
     format!("{prefix}{}{suffix}", window.trim())
 }
 
@@ -184,14 +203,19 @@ fn matching_lines(text: &str, needle: &str, limit: usize) -> Vec<Hit> {
     let mut hits = Vec::new();
     for (index, line) in text.lines().enumerate() {
         let lower = line.to_lowercase();
-        let Some(at) = lower.find(needle) else { continue };
+        let Some(at) = lower.find(needle) else {
+            continue;
+        };
         // Lower-casing can change byte lengths; the position is only used
         // to place the window, so it is clamped rather than trusted.
         let mut at = at.min(line.len());
         while !line.is_char_boundary(at) {
             at -= 1;
         }
-        hits.push(Hit { line: index as u32 + 1, text: snippet(line, at) });
+        hits.push(Hit {
+            line: index as u32 + 1,
+            text: snippet(line, at),
+        });
         if hits.len() >= limit {
             break;
         }
@@ -202,7 +226,12 @@ fn matching_lines(text: &str, needle: &str, limit: usize) -> Vec<Hit> {
 /// Searches every Markdown file under `root` for `query`, literally and
 /// ignoring case, reporting each file with matches through `report` as it
 /// is found. `current` tells whether this search is still wanted.
-fn search(root: &Path, query: &str, current: impl Fn() -> bool, mut report: impl FnMut(FileHits)) -> SearchSummary {
+fn search(
+    root: &Path,
+    query: &str,
+    current: impl Fn() -> bool,
+    mut report: impl FnMut(FileHits),
+) -> SearchSummary {
     let needle = query.to_lowercase();
     let mut summary = SearchSummary::default();
     if needle.trim().is_empty() {
@@ -212,10 +241,15 @@ fn search(root: &Path, query: &str, current: impl Fn() -> bool, mut report: impl
         if !current() {
             return false;
         }
-        if std::fs::metadata(path).map(|m| m.len() > MAX_FILE_BYTES).unwrap_or(true) {
+        if std::fs::metadata(path)
+            .map(|m| m.len() > MAX_FILE_BYTES)
+            .unwrap_or(true)
+        {
             return true;
         }
-        let Ok(bytes) = std::fs::read(path) else { return true };
+        let Ok(bytes) = std::fs::read(path) else {
+            return true;
+        };
         let text = String::from_utf8_lossy(&bytes);
         // One pass over the whole file first: most files do not match.
         if !text.to_lowercase().contains(&needle) {
@@ -231,7 +265,10 @@ fn search(root: &Path, query: &str, current: impl Fn() -> bool, mut report: impl
         // A link is reported as the file it leads to: that is the path
         // the document gets when it is opened.
         let shown = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-        report(FileHits { path: shown.to_string_lossy().into_owned(), hits });
+        report(FileHits {
+            path: shown.to_string_lossy().into_owned(),
+            hits,
+        });
         if summary.hits >= MAX_HITS {
             summary.truncated = true;
             return false;
@@ -298,7 +335,10 @@ mod tests {
             // Tests run in parallel: every scratch folder gets its own name.
             static NEXT: AtomicU64 = AtomicU64::new(0);
             let unique = NEXT.fetch_add(1, Ordering::SeqCst);
-            let dir = std::env::temp_dir().join(format!("mdwisp-test-{name}-{}-{unique}", std::process::id()));
+            let dir = std::env::temp_dir().join(format!(
+                "mdwisp-test-{name}-{}-{unique}",
+                std::process::id()
+            ));
             let _ = fs::remove_dir_all(&dir);
             fs::create_dir_all(&dir).unwrap();
             Scratch(fs::canonicalize(&dir).unwrap())
@@ -322,7 +362,10 @@ mod tests {
         dir.write("readme.md", "# Notes\n\nAn Invoice for March.\n");
         dir.write("Alpha.md", "alpha\n");
         dir.write("logo.png", "invoice");
-        dir.write("docs/spec.markdown", "first\nthe invoice number\nINVOICE again\n");
+        dir.write(
+            "docs/spec.markdown",
+            "first\nthe invoice number\nINVOICE again\n",
+        );
         dir.write("docs/deep/note.md", "nothing here\n");
         dir.write(".hidden/secret.md", "invoice\n");
         dir.write("node_modules/pkg/README.md", "invoice\n");
@@ -337,7 +380,15 @@ mod tests {
     fn index_lists_markdown_only_in_order_and_skips_hidden_and_dependencies() {
         let dir = sample();
         let found = index(&dir.0);
-        assert_eq!(relative(&found.files), ["Alpha.md", "readme.md", "docs/spec.markdown", "docs/deep/note.md"]);
+        assert_eq!(
+            relative(&found.files),
+            [
+                "Alpha.md",
+                "readme.md",
+                "docs/spec.markdown",
+                "docs/deep/note.md"
+            ]
+        );
         assert!(!found.truncated);
     }
 
@@ -346,12 +397,29 @@ mod tests {
         let dir = sample();
         let mut files = Vec::new();
         let summary = search(&dir.0, "invoice", || true, |file| files.push(file));
-        assert_eq!(summary, SearchSummary { files: 2, hits: 3, truncated: false, cancelled: false });
+        assert_eq!(
+            summary,
+            SearchSummary {
+                files: 2,
+                hits: 3,
+                truncated: false,
+                cancelled: false
+            }
+        );
         assert_eq!(files.len(), 2);
         assert!(files[0].path.ends_with("readme.md"));
-        assert_eq!(files[0].hits, [Hit { line: 3, text: "An Invoice for March.".into() }]);
+        assert_eq!(
+            files[0].hits,
+            [Hit {
+                line: 3,
+                text: "An Invoice for March.".into()
+            }]
+        );
         assert!(files[1].path.ends_with("spec.markdown"));
-        assert_eq!(files[1].hits.iter().map(|h| h.line).collect::<Vec<_>>(), [2, 3]);
+        assert_eq!(
+            files[1].hits.iter().map(|h| h.line).collect::<Vec<_>>(),
+            [2, 3]
+        );
     }
 
     #[test]
@@ -371,7 +439,10 @@ mod tests {
         let summary = search(&dir.0, "invoice", || false, |file| files.push(file));
         assert!(summary.cancelled);
         assert!(files.is_empty());
-        assert_eq!(search(&dir.0, "   ", || true, |_| panic!("no search")), SearchSummary::default());
+        assert_eq!(
+            search(&dir.0, "   ", || true, |_| panic!("no search")),
+            SearchSummary::default()
+        );
     }
 
     #[test]
@@ -402,7 +473,10 @@ mod tests {
         let mut files = Vec::new();
         search(&dir.0, "needle", || true, |file| files.push(file));
         let expected = dir.0.join("real/target.md").to_string_lossy().into_owned();
-        assert_eq!(files.iter().map(|f| f.path.clone()).collect::<Vec<_>>(), [expected.clone(), expected]);
+        assert_eq!(
+            files.iter().map(|f| f.path.clone()).collect::<Vec<_>>(),
+            [expected.clone(), expected]
+        );
     }
 
     #[test]
@@ -425,6 +499,8 @@ mod tests {
         assert!(text.chars().count() <= MAX_LINE_CHARS + 2);
         // Multi-byte text around the match must not split a character.
         let accented = format!("{}Ünïcödé needle{}", "é".repeat(400), "ü".repeat(400));
-        assert!(matching_lines(&accented, "needle", 10)[0].text.contains("needle"));
+        assert!(matching_lines(&accented, "needle", 10)[0]
+            .text
+            .contains("needle"));
     }
 }
