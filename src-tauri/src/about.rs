@@ -36,12 +36,14 @@ pub fn show(about: &About, version: &str, update: &UpdateLink) {
     use objc2::runtime::AnyObject;
     use objc2::{AnyThread, MainThreadMarker};
     use objc2_app_kit::{
-        NSAboutPanelOptionApplicationIcon, NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion,
-        NSAboutPanelOptionCredits, NSAboutPanelOptionVersion, NSApplication, NSImage, NSLinkAttributeName,
-        NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSTextAlignment,
+        NSAboutPanelOptionApplicationIcon, NSAboutPanelOptionApplicationName,
+        NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionCredits, NSAboutPanelOptionVersion,
+        NSApplication, NSImage, NSLinkAttributeName, NSMutableParagraphStyle,
+        NSParagraphStyleAttributeName, NSTextAlignment,
     };
     use objc2_foundation::{
-        ns_string, NSAttributedString, NSData, NSDictionary, NSMutableAttributedString, NSString, NSURL,
+        ns_string, NSAttributedString, NSData, NSDictionary, NSMutableAttributedString, NSString,
+        NSURL,
     };
 
     /// The bundle supplies the icon in a packaged app; passing it explicitly
@@ -75,12 +77,19 @@ pub fn show(about: &About, version: &str, update: &UpdateLink) {
             ))
         };
         let plain = |text: &str| {
-            let attrs = NSDictionary::from_slices::<NSString>(&[NSParagraphStyleAttributeName], &[style]);
-            NSAttributedString::initWithString_attributes(NSAttributedString::alloc(), &NSString::from_str(text), Some(&attrs))
+            let attrs =
+                NSDictionary::from_slices::<NSString>(&[NSParagraphStyleAttributeName], &[style]);
+            NSAttributedString::initWithString_attributes(
+                NSAttributedString::alloc(),
+                &NSString::from_str(text),
+                Some(&attrs),
+            )
         };
 
-        let (Some(update_link), Some(publisher)) = (link(update.label, update.url), link(about.publisher, about.homepage))
-        else {
+        let (Some(update_link), Some(publisher)) = (
+            link(update.label, update.url),
+            link(about.publisher, about.homepage),
+        ) else {
             return;
         };
         let credits = NSMutableAttributedString::new();

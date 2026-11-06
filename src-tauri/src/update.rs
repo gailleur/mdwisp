@@ -37,8 +37,12 @@ pub struct Found(Mutex<Option<Update>>);
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Check {
     /// The Mac App Store copy: updates come through the store.
-    Store { url: String },
-    UpToDate { version: String },
+    Store {
+        url: String,
+    },
+    UpToDate {
+        version: String,
+    },
     Available {
         version: String,
         /// Release date as the manifest states it, ISO 8601.
@@ -56,9 +60,14 @@ struct Progress {
 
 /// Fetches the release manifest and compares it with the running version.
 #[tauri::command]
-pub async fn check_update<R: Runtime>(app: AppHandle<R>, found: State<'_, Found>) -> Result<Check, String> {
+pub async fn check_update<R: Runtime>(
+    app: AppHandle<R>,
+    found: State<'_, Found>,
+) -> Result<Check, String> {
     if crate::sandbox::active() {
-        return Ok(Check::Store { url: STORE_URL.into() });
+        return Ok(Check::Store {
+            url: STORE_URL.into(),
+        });
     }
     let updater = app
         .updater_builder()
@@ -76,9 +85,10 @@ pub async fn check_update<R: Runtime>(app: AppHandle<R>, found: State<'_, Found>
         Some(update) => {
             let check = Check::Available {
                 version: update.version.clone(),
-                date: update
-                    .date
-                    .and_then(|d| d.format(&time::format_description::well_known::Rfc3339).ok()),
+                date: update.date.and_then(|d| {
+                    d.format(&time::format_description::well_known::Rfc3339)
+                        .ok()
+                }),
                 notes: update.body.clone(),
             };
             if let Ok(mut slot) = found.0.lock() {
@@ -131,7 +141,10 @@ pub async fn install_update<R: Runtime>(
 
     // Exiting this way skips the event loop's exit path, where the window
     // state plugin normally records size and position; do it here.
-    let _ = tauri_plugin_window_state::AppHandleExt::save_window_state(&app, tauri_plugin_window_state::StateFlags::all());
+    let _ = tauri_plugin_window_state::AppHandleExt::save_window_state(
+        &app,
+        tauri_plugin_window_state::StateFlags::all(),
+    );
 
     // Same steps as `AppHandle::restart`, with the documents appended to the
     // argument list the new process is started with.

@@ -142,7 +142,11 @@ mod platform {
         }
     }
 
-    fn start(webview: PlatformWebview, path: &Path, tx: Sender<super::Outcome>) -> Result<(), String> {
+    fn start(
+        webview: PlatformWebview,
+        path: &Path,
+        tx: Sender<super::Outcome>,
+    ) -> Result<(), String> {
         let path = path.to_str().ok_or("Path is not valid UTF-8.")?;
         // SAFETY: Tauri invokes this closure on the main thread with a live
         // WKWebView pointer. WebKit paginates on a secondary printing thread
@@ -190,7 +194,9 @@ mod platform {
     use std::sync::mpsc::Sender;
 
     use tauri::webview::PlatformWebview;
-    use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2Environment6, ICoreWebView2_7};
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2Environment6, ICoreWebView2_7,
+    };
     use webview2_com::PrintToPdfCompletedHandler;
     use windows_core::{Interface, HSTRING, PCWSTR};
 
@@ -202,7 +208,11 @@ mod platform {
         }
     }
 
-    fn start(webview: PlatformWebview, path: &Path, tx: Sender<super::Outcome>) -> Result<(), String> {
+    fn start(
+        webview: PlatformWebview,
+        path: &Path,
+        tx: Sender<super::Outcome>,
+    ) -> Result<(), String> {
         let e = |err: windows_core::Error| err.to_string();
         // SAFETY: COM calls on the WebView2 objects Tauri owns, made on the
         // main thread inside `with_webview`. The completion handler keeps
@@ -234,7 +244,8 @@ mod platform {
                 let _ = tx.send(outcome);
                 Ok(())
             }));
-            core.PrintToPdf(PCWSTR(file.as_ptr()), &settings, &handler).map_err(e)
+            core.PrintToPdf(PCWSTR(file.as_ptr()), &settings, &handler)
+                .map_err(e)
         }
     }
 }

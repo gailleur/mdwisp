@@ -42,9 +42,15 @@ const ABOUT: about::About = about::About {
 /// store, every other build at the in-app check.
 fn update_link() -> about::UpdateLink {
     if sandbox::active() {
-        about::UpdateLink { label: "View in the App Store", url: update::STORE_URL }
+        about::UpdateLink {
+            label: "View in the App Store",
+            url: update::STORE_URL,
+        }
     } else {
-        about::UpdateLink { label: "Check for Updates…", url: about::CHECK_URL }
+        about::UpdateLink {
+            label: "Check for Updates…",
+            url: about::CHECK_URL,
+        }
     }
 }
 
@@ -122,7 +128,10 @@ fn open_folder<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Folder, St
         .map(|n| n.to_string_lossy().into_owned())
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| dir.to_string_lossy().into_owned());
-    Ok(Folder { path: dir.to_string_lossy().into_owned(), name })
+    Ok(Folder {
+        path: dir.to_string_lossy().into_owned(),
+        name,
+    })
 }
 
 #[derive(serde::Serialize)]
@@ -256,7 +265,11 @@ struct SavedDocument {
 /// never leaves a truncated file, then grants access to its directory as
 /// `open_document` does. Only Markdown extensions may be written.
 #[tauri::command]
-fn save_document<R: Runtime>(app: AppHandle<R>, path: String, text: String) -> Result<SavedDocument, String> {
+fn save_document<R: Runtime>(
+    app: AppHandle<R>,
+    path: String,
+    text: String,
+) -> Result<SavedDocument, String> {
     let requested = PathBuf::from(&path);
     if !looks_like_markdown(&requested) {
         return Err("Only Markdown files can be saved.".into());
@@ -306,7 +319,11 @@ fn save_document<R: Runtime>(app: AppHandle<R>, path: String, text: String) -> R
 
 #[tauri::command]
 fn take_pending_files(pending: State<'_, PendingFiles>) -> Vec<String> {
-    pending.0.lock().map(|mut l| std::mem::take(&mut *l)).unwrap_or_default()
+    pending
+        .0
+        .lock()
+        .map(|mut l| std::mem::take(&mut *l))
+        .unwrap_or_default()
 }
 
 /// Asks what to do with unsaved changes before a tab or the window closes.
@@ -315,16 +332,27 @@ fn take_pending_files(pending: State<'_, PendingFiles>) -> Vec<String> {
 /// counts as cancel. The dialog plugin's JavaScript API stops at two
 /// buttons, hence this command.
 #[tauri::command]
-async fn confirm_close<R: Runtime>(window: tauri::WebviewWindow<R>, name: String) -> Result<String, String> {
-    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
+async fn confirm_close<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+    name: String,
+) -> Result<String, String> {
+    use tauri_plugin_dialog::{
+        DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult,
+    };
     let (tx, rx) = mpsc::channel::<MessageDialogResult>();
     window
         .dialog()
-        .message(format!("“{name}” has unsaved changes. Save them before closing?"))
+        .message(format!(
+            "“{name}” has unsaved changes. Save them before closing?"
+        ))
         .title("Unsaved changes")
         .kind(MessageDialogKind::Warning)
         .parent(&window)
-        .buttons(MessageDialogButtons::YesNoCancelCustom("Save".into(), "Discard".into(), "Cancel".into()))
+        .buttons(MessageDialogButtons::YesNoCancelCustom(
+            "Save".into(),
+            "Discard".into(),
+            "Cancel".into(),
+        ))
         .show_with_result(move |result| {
             let _ = tx.send(result);
         });
@@ -345,7 +373,11 @@ async fn confirm_close<R: Runtime>(window: tauri::WebviewWindow<R>, name: String
 /// state (it persists across launches) and calls this at startup and on
 /// every change, so the menu never disagrees with the status bar.
 #[tauri::command]
-fn set_menu_checked<R: Runtime>(app: AppHandle<R>, id: String, checked: bool) -> Result<(), String> {
+fn set_menu_checked<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    checked: bool,
+) -> Result<(), String> {
     use tauri::menu::{CheckMenuItem, MenuItemKind};
     // `Menu::get` looks only at the top level; the toggles live in submenus.
     fn find<R: Runtime>(items: Vec<MenuItemKind<R>>, id: &str) -> Option<CheckMenuItem<R>> {
@@ -356,7 +388,8 @@ fn set_menu_checked<R: Runtime>(app: AppHandle<R>, id: String, checked: bool) ->
         })
     }
     let menu = app.menu().ok_or("No menu.")?;
-    let item = find(menu.items().map_err(|e| e.to_string())?, &id).ok_or_else(|| format!("No toggle menu item {id}."))?;
+    let item = find(menu.items().map_err(|e| e.to_string())?, &id)
+        .ok_or_else(|| format!("No toggle menu item {id}."))?;
     item.set_checked(checked).map_err(|e| e.to_string())
 }
 
@@ -383,7 +416,10 @@ async fn print_page<R: Runtime>(window: tauri::WebviewWindow<R>) -> Result<bool,
 /// Writes the current page as a PDF at `path` using the platform webview's
 /// own print-to-file path. Only `.pdf` targets are accepted.
 #[tauri::command]
-async fn export_pdf<R: Runtime>(window: tauri::WebviewWindow<R>, path: String) -> Result<(), String> {
+async fn export_pdf<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+    path: String,
+) -> Result<(), String> {
     let path = PathBuf::from(path);
     let is_pdf = path
         .extension()
@@ -442,7 +478,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .build(app)?;
     // Toggles are check items; the frontend owns the state and mirrors it
     // into the check mark through `set_menu_checked`.
-    let autosave = CheckMenuItemBuilder::with_id("autosave", "Autosave").checked(false).build(app)?;
+    let autosave = CheckMenuItemBuilder::with_id("autosave", "Autosave")
+        .checked(false)
+        .build(app)?;
     let reload = MenuItemBuilder::with_id("reload", "Reload")
         .accelerator("CmdOrCtrl+R")
         .build(app)?;
@@ -513,13 +551,14 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
     // Format: block types and inline marks. Ids are "fmt-<kind>" and the
     // frontend applies them to whichever editor is active.
-    let fmt = |id: &str, label: &str, accel: Option<&str>| -> tauri::Result<tauri::menu::MenuItem<R>> {
-        let b = MenuItemBuilder::with_id(format!("fmt-{id}"), label);
-        match accel {
-            Some(a) => b.accelerator(a).build(app),
-            None => b.build(app),
-        }
-    };
+    let fmt =
+        |id: &str, label: &str, accel: Option<&str>| -> tauri::Result<tauri::menu::MenuItem<R>> {
+            let b = MenuItemBuilder::with_id(format!("fmt-{id}"), label);
+            match accel {
+                Some(a) => b.accelerator(a).build(app),
+                None => b.build(app),
+            }
+        };
     let format = SubmenuBuilder::new(app, "Format")
         .item(&fmt("paragraph", "Paragraph", Some("CmdOrCtrl+Alt+0"))?)
         .item(&fmt("h1", "Heading 1", Some("CmdOrCtrl+Alt+1"))?)
@@ -551,9 +590,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let preview_tabs = CheckMenuItemBuilder::with_id("preview-tabs", "Preview Tabs")
         .checked(false)
         .build(app)?;
-    let restore_session = CheckMenuItemBuilder::with_id("restore-session", "Reopen Documents at Launch")
-        .checked(false)
-        .build(app)?;
+    let restore_session =
+        CheckMenuItemBuilder::with_id("restore-session", "Reopen Documents at Launch")
+            .checked(false)
+            .build(app)?;
     let files = CheckMenuItemBuilder::with_id("files", "Files Sidebar")
         .accelerator("CmdOrCtrl+Alt+E")
         .checked(false)
@@ -613,7 +653,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let help_item = MenuItemBuilder::with_id("help", "mdwisp Help")
         .accelerator("CmdOrCtrl+/")
         .build(app)?;
-    let check_updates = MenuItemBuilder::with_id("check-updates", "Check for Updates…").build(app)?;
+    let check_updates =
+        MenuItemBuilder::with_id("check-updates", "Check for Updates…").build(app)?;
     let help = SubmenuBuilder::new(app, "Help")
         .item(&help_item)
         .separator()
@@ -711,7 +752,8 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if event.id().0 == "about" {
                 let version = app.package_info().version.to_string();
-                let _ = app.run_on_main_thread(move || about::show(&ABOUT, &version, &update_link()));
+                let _ =
+                    app.run_on_main_thread(move || about::show(&ABOUT, &version, &update_link()));
                 return;
             }
             let _ = app.emit("menu", event.id().0.clone());
