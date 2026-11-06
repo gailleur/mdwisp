@@ -283,7 +283,7 @@ fn save_document<R: Runtime>(
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .map(std::fs::canonicalize)
-        .unwrap_or_else(|| std::env::current_dir())
+        .unwrap_or_else(std::env::current_dir)
         .map_err(|e| e.to_string())?;
     let target = dir.join(&name);
 
