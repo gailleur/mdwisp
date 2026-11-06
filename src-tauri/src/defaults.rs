@@ -16,6 +16,7 @@ use std::sync::mpsc::Sender;
 
 pub enum Outcome {
     /// The default is set.
+    #[cfg_attr(windows, allow(dead_code))]
     Done,
     /// The platform's settings page is open; the user finishes there.
     #[cfg_attr(not(windows), allow(dead_code))]
