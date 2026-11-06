@@ -22,6 +22,7 @@ pub struct About {
 }
 
 /// The update line in the credits: its label and the URL it opens.
+#[cfg(target_os = "macos")]
 pub struct UpdateLink {
     pub label: &'static str,
     pub url: &'static str,
@@ -29,6 +30,7 @@ pub struct UpdateLink {
 
 /// URL the About box's "Check for Updates…" link opens; lib.rs turns it
 /// into the same action as the Help menu item.
+#[cfg(target_os = "macos")]
 pub const CHECK_URL: &str = "mdwisp://check-updates";
 
 #[cfg(target_os = "macos")]

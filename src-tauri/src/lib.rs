@@ -39,7 +39,9 @@ const ABOUT: about::About = about::About {
 };
 
 /// The About box's update line: the Mac App Store copy points at the
-/// store, every other build at the in-app check.
+/// store, every other build at the in-app check. Only macOS draws its own
+/// About box; elsewhere the menu library's has no room for the line.
+#[cfg(target_os = "macos")]
 fn update_link() -> about::UpdateLink {
     if sandbox::active() {
         about::UpdateLink {
@@ -674,10 +676,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     };
     let help = help.build()?;
 
-    let mut menu = MenuBuilder::new(app);
+    let menu = MenuBuilder::new(app);
 
     #[cfg(target_os = "macos")]
-    {
+    let menu = {
         let about_item = MenuItemBuilder::with_id("about", "About mdwisp").build(app)?;
         let app_menu = SubmenuBuilder::new(app, "mdwisp")
             .item(&about_item)
@@ -690,8 +692,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .separator()
             .quit()
             .build()?;
-        menu = menu.item(&app_menu);
-    }
+        menu.item(&app_menu)
+    };
 
     let menu = menu.items(&[&file, &edit, &format, &view, &help]).build()?;
     app.set_menu(menu)?;

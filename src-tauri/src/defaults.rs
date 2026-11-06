@@ -247,7 +247,7 @@ mod platform {
             } else if in_defaults
                 && trimmed
                     .strip_prefix(MIME)
-                    .map_or(false, |r| r.trim_start().starts_with('='))
+                    .is_some_and(|r| r.trim_start().starts_with('='))
             {
                 if !written {
                     out.push(entry.clone());
@@ -259,7 +259,7 @@ mod platform {
         }
         if !written {
             if !seen_section {
-                if out.last().map_or(false, |l| !l.is_empty()) {
+                if out.last().is_some_and(|l| !l.is_empty()) {
                     out.push(String::new());
                 }
                 out.push(SECTION.to_string());
