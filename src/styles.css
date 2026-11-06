@@ -1341,7 +1341,7 @@ body.is-resizing .viewer {
   top: var(--bar-h);
   right: 16px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 2px;
   padding: 4px 4px 4px 6px;
   border: 1px solid var(--line);
@@ -1366,6 +1366,22 @@ body.is-resizing .viewer {
   border-bottom-color: var(--accent);
 }
 
+.find__input--invalid,
+.find__input--invalid:focus {
+  border-bottom-color: var(--danger);
+}
+
+.find__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The replace field lines up under the find field, past the ▸ toggle. */
+.find__row--replace {
+  padding-left: 26px;
+}
+
 .find__count {
   min-width: 3.5em;
   margin: 0 4px;
@@ -1387,6 +1403,35 @@ body.is-resizing .viewer {
 .find__button:hover {
   background: var(--line);
   color: var(--strong);
+}
+
+.find__button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.find__expander {
+  font-size: 10px;
+}
+
+.find__toggle {
+  font: 11px var(--mono);
+}
+
+.find__toggle--word {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.find__toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.find__button--text {
+  width: auto;
+  padding: 0 6px;
+  font: 11px var(--mono);
 }
 
 .find__match {

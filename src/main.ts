@@ -399,7 +399,7 @@ function boot(): void {
   }
 
   const theme = new Theme();
-  const find = new FindBar(viewer);
+  const find = new FindBar(viewer, { notify: (message) => toast(message) });
   const outline = new Outline((width) => writeNumber(OUTLINE_WIDTH_KEY, width));
   const savedWidth = readNumber(OUTLINE_WIDTH_KEY);
   if (savedWidth !== null) outline.setWidth(savedWidth);
@@ -558,9 +558,13 @@ function boot(): void {
       wordsItem.title = `Reading time at ${WORDS_PER_MINUTE} words per minute`;
       eolItem.textContent = tab.baseline.eol === "\r\n" ? "CRLF" : "LF";
       find.setTarget(tab.article, tab.mode === "wysiwyg");
+      // Only the editor replaces through the bar: the reading view cannot be
+      // edited, and source mode has CodeMirror's own search panel.
+      find.setReplacer(tab.mode === "wysiwyg" ? (edits) => tab.wysiwyg?.replaceRanges(edits) ?? 0 : null);
       find.refresh();
     } else {
       find.setTarget(null);
+      find.setReplacer(null);
     }
     refreshOutline(tab);
     refreshCursorState();
@@ -698,6 +702,24 @@ function boot(): void {
     }
     if (step === 0) find.toggle();
     else find.step(step);
+  };
+
+  const replaceAction = () => {
+    const tab = tabs.current;
+    if (!tab) return;
+    if (tab.mode === "source" && tab.source) {
+      tab.source.openReplace();
+      return;
+    }
+    if (tab.mode === "view") {
+      toast(keysFor("switch to the editor (⌘2) or source (⌘3) to replace", isMac));
+      return;
+    }
+    if (find.requiresDomMutation) {
+      toast("Replace in the editor needs a newer webview; use source mode.");
+      return;
+    }
+    find.openReplace();
   };
 
   const applyFormat = async (kind: FormatKind) => {
@@ -871,6 +893,7 @@ function boot(): void {
     find: () => findAction(0),
     "find-next": () => findAction(1),
     "find-prev": () => findAction(-1),
+    replace: replaceAction,
     "mode-view": () => void tabs.setMode("view"),
     "mode-wysiwyg": () => void tabs.setMode("wysiwyg"),
     "mode-source": () => void tabs.setMode("source"),
@@ -993,6 +1016,11 @@ function boot(): void {
       return;
     }
     // With Option held the key itself is a symbol on a Mac; go by position.
+    if (event.altKey && event.code === "KeyF") {
+      event.preventDefault();
+      run("replace");
+      return;
+    }
     if (event.altKey && event.code === "KeyP") {
       event.preventDefault();
       run("print");

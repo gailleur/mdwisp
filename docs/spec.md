@@ -88,7 +88,12 @@ does, not how any other product does it. All implementation is original.
 - Find in document: a bar with a text field, match counter ("n of m"),
   previous / next, and close. Enter advances, Shift+Enter goes back, Escape
   closes. Matches are highlighted; the active match is scrolled into view.
-  Case-insensitive, literal (not regex).
+  By default the search is literal and ignores case. Three toggles in the
+  bar change that: Aa (match case), ab (whole word) and .* (regular
+  expression), also Alt+C/W/R, or ⌘⌥C/W/R on macOS, where Option alone
+  types characters. An invalid expression is flagged in the field rather
+  than searched. A match lies within one run of text. At most 10,000
+  matches are highlighted; the counter shows "+" beyond.
 - Zoom: Cmd/Ctrl + / − / 0.
 - Files: an optional left sidebar (⌘⌥E, View ▸ Files Sidebar, or the files
   button in the status bar) shows the tree of one folder, opened with
@@ -198,6 +203,17 @@ does, not how any other product does it. All implementation is original.
 - Find works in reading and source modes everywhere, and in the editor on
   webviews with the CSS Custom Highlight API (Safari 17.2+, WebView2, recent
   WebKitGTK).
+- Replace (⌘⌥F, *Edit ▸ Replace…*, or ▸ at the left of the find bar) adds a
+  replace field to the find bar in the editor. Enter replaces the current
+  match and moves to the next, stepping over any match the new text itself
+  contains; ⌘Enter replaces every match. The edits go through the editor as
+  one transaction, so a single undo reverts a Replace All, and replaced text
+  keeps its formatting (bold, links). A match whose text changed since it
+  was found is left alone. With the regular-expression toggle on, `$1`,
+  `$<name>`, `$&` and `$$` in the replacement expand as in JavaScript;
+  otherwise it is taken literally. Source mode uses CodeMirror's own search
+  panel, which replaces too; ⌘⌥F opens it with the focus in its replace
+  field. The reading view cannot be edited, so it only finds.
 
 ## 6. Security model
 

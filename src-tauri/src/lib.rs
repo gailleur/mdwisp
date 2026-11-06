@@ -527,6 +527,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let find = MenuItemBuilder::with_id("find", "Find…")
         .accelerator("CmdOrCtrl+F")
         .build(app)?;
+    let replace = MenuItemBuilder::with_id("replace", "Replace…")
+        .accelerator("CmdOrCtrl+Alt+F")
+        .build(app)?;
     let find_next = MenuItemBuilder::with_id("find-next", "Find Next")
         .accelerator("CmdOrCtrl+G")
         .build(app)?;
@@ -546,6 +549,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .select_all()
         .separator()
         .item(&find)
+        .item(&replace)
         .item(&find_next)
         .item(&find_prev)
         .item(&search_folder)

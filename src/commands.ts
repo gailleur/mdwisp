@@ -34,6 +34,7 @@ export const COMMANDS = [
   { id: "find", group: "Edit", title: "Find…", keys: "⌘F" },
   { id: "find-next", group: "Edit", title: "Find Next", keys: "⌘G" },
   { id: "find-prev", group: "Edit", title: "Find Previous", keys: "⌘⇧G" },
+  { id: "replace", group: "Edit", title: "Replace…", keys: "⌘⌥F" },
   { id: "search-folder", group: "Edit", title: "Find in Folder…", keys: "⌘⇧F" },
 
   { id: "fmt-paragraph", group: "Format", title: "Paragraph", keys: "⌘⌥0" },

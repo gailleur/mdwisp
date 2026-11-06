@@ -41,6 +41,7 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { callCommand, getMarkdown, replaceAll } from "@milkdown/kit/utils";
 
+import type { ReplaceEdit } from "./find";
 import { headingLevel, type BlockType, type FormatKind } from "./format";
 import { resolveRelative } from "./render";
 
@@ -78,6 +79,11 @@ export interface WysiwygEditor {
   /** Position of the heading containing or preceding the cursor, if any. */
   cursorPos(): number;
   goTo(pos: number): void;
+  /**
+   * Replaces the text of DOM ranges in the editor (find & replace) as one
+   * undoable step. Returns how many were replaced; see `replaceRanges`.
+   */
+  replaceRanges(edits: ReplaceEdit[]): number;
   focus(): void;
   destroy(): Promise<void>;
 }
@@ -201,6 +207,56 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
     view().focus();
   };
 
+  /**
+   * Maps each range back to document positions and replaces its text, all in
+   * one transaction, so a single undo restores everything. A range is
+   * skipped unless it lies in editable content and the document holds
+   * exactly the text the range shows there; replacements keep the marks
+   * (bold, links, …) of the text they replace.
+   */
+  const replaceRanges = (edits: ReplaceEdit[]): number => {
+    const v = view();
+    const spans: { from: number; to: number; text: string }[] = [];
+    for (const { range, text } of edits) {
+      const node = range.startContainer;
+      if (node !== range.endContainer || !v.dom.contains(node)) continue;
+      const host = node.parentElement?.closest('[contenteditable="false"]');
+      if (host && v.dom.contains(host)) continue;
+      let from: number;
+      let to: number;
+      try {
+        from = v.posAtDOM(node, range.startOffset);
+        to = v.posAtDOM(node, range.endOffset);
+      } catch {
+        continue;
+      }
+      if (to <= from || v.state.doc.textBetween(from, to) !== range.toString()) continue;
+      spans.push({ from, to, text });
+    }
+    if (spans.length === 0) return 0;
+    // From the end backwards, so earlier positions stay valid.
+    spans.sort((a, b) => b.from - a.from);
+    const tr = v.state.tr;
+    let last = Number.POSITIVE_INFINITY;
+    let applied = 0;
+    for (const { from, to, text } of spans) {
+      if (to > last) continue; // overlapping; cannot happen with find's matches
+      if (text) {
+        // The marks of the replaced text, not any the user has armed at
+        // the cursor (insertText would take those).
+        const $from = tr.doc.resolve(from);
+        const marks = $from.marksAcross(tr.doc.resolve(to)) ?? $from.marks();
+        tr.replaceWith(from, to, v.state.schema.text(text, marks));
+      } else {
+        tr.delete(from, to);
+      }
+      last = from;
+      applied += 1;
+    }
+    v.dispatch(tr);
+    return applied;
+  };
+
   const blockType = (): BlockType => {
     const $from = view().state.selection.$from;
     const parent = $from.parent;
@@ -265,6 +321,7 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
       if (dom instanceof HTMLElement) dom.scrollIntoView({ block: "start" });
       v.focus();
     },
+    replaceRanges,
     focus: () => view().focus(),
     destroy: async () => {
       observer.disconnect();
