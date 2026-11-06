@@ -66,18 +66,34 @@ WebView2 and WebKitGTK complete asynchronously on the main thread.
 
 ## Release
 
-Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`: it checks the
-tag against the three version fields, builds installers on macOS, Linux and
+Every change lands on `main` through a pull request. Two rulesets guard the
+branch: one requires the `ci-ok` check from `.github/workflows/ci.yml`, a
+linear history and no force pushes, for everyone; the other requires a
+pull request approved by the code owner, which the maintainer alone may
+bypass, and only by merging a pull request. `ci-ok` passes when the type
+check, lint and unit tests passed and the three-platform build with Clippy
+and the shell tests either passed or was skipped because only `site/`
+changed.
+
+A release starts with `scripts/bump-version.sh X.Y.Z`, merged like any
+other change. Pushing a `vX.Y.Z` tag then runs
+`.github/workflows/release.yml`: it checks the tag against the version
+fields, that the tagged commit is on `main` and that `ci-ok` passed on it
+(waiting if CI is still running), builds installers on macOS, Linux and
 Windows, writes `SHA256SUMS`, and opens a *draft* GitHub release holding all
 of them. Publishing the draft is manual. The macOS build is signed with the
-Developer ID certificate and notarized by Apple from the `APPLE_*`
-repository secrets; Tauri does the signing, submission and stapling itself,
-and the workflow re-checks the result with `codesign`, `spctl` and
-`stapler`. Forks without the secrets get an unsigned build. Windows builds
-are unsigned; the README explains how to open them.
+Developer ID certificate and notarized by Apple from the `APPLE_*` secrets;
+Tauri does the signing, submission and stapling itself, and the workflow
+re-checks the result with `codesign`, `spctl` and `stapler`. The signing
+secrets belong to the `release` environment, which only `v*` tags may use,
+so a workflow on a branch cannot read them. Forks without the secrets get
+an unsigned build. Windows builds are unsigned; the README explains how to
+open them.
 
-The Mac App Store build is separate: `.github/workflows/appstore.yml`, run
-by hand for a tag, builds a universal binary with the App Sandbox
+Publishing the release starts two more workflows. `linux-smoke.yml`
+installs the previous release's Linux packages on Ubuntu runners and runs
+the update check against the new one. The Mac App Store build is
+`.github/workflows/appstore.yml`: it builds a universal binary with the App Sandbox
 entitlements in `src-tauri/Entitlements.plist` merged in through
 `tauri.appstore.conf.json`, signs it with the Apple Distribution identity,
 wraps it with `productbuild` and uploads it with `altool`. The sandbox
