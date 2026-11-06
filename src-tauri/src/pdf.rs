@@ -256,7 +256,6 @@ mod platform {
     use std::path::PathBuf;
     use std::sync::mpsc::Sender;
 
-    use gtk::prelude::*;
     use tauri::webview::PlatformWebview;
     use webkit2gtk::{PrintOperation, PrintOperationExt};
 
