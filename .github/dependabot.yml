@@ -1,0 +1,30 @@
+# Weekly pull requests for outdated dependencies. Minor and patch updates
+# arrive as one pull request per ecosystem; major versions come one at a
+# time so each can be read on its own. Like any other change they need CI
+# and the maintainer's approval before they merge.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  # The workflows pin actions to commit SHAs; this keeps the pins current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
