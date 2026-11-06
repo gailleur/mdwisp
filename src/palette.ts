@@ -122,7 +122,8 @@ function highlighted(text: string, positions: number[], className: string): HTML
 
 export function openPalette(options: PaletteOptions): Palette {
   const joiner = options.joiner ?? " ";
-  const id = `palette-${(serial += 1)}`;
+  serial += 1;
+  const id = `palette-${serial}`;
   const returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   let items = options.items;
   let shown: RankedItem[] = [];

@@ -37,6 +37,7 @@ the usual Tauri system packages.
 pnpm install
 pnpm tauri dev          # run the app
 pnpm test               # frontend unit tests
+pnpm lint               # lint the frontend
 pnpm tauri build        # produce a platform installer in src-tauri/target
 ```
 
