@@ -3,17 +3,20 @@ name: Linux smoke test
 # Installs the published Linux packages on real Ubuntu runners, opens a
 # document under a virtual display, and runs Help ▸ Check for Updates…
 # against the live endpoint. Screenshots are uploaded as artifacts so a
-# person can look at the result. Run by hand after a release.
+# person can look at the result. Runs when a GitHub release is published,
+# for that release and the one before it; run it by hand to test any pair.
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release to test"
-        default: "v0.1.5"
+        description: "Release to test (empty: the latest)"
+        default: ""
       previous:
-        description: "Older release to install first, so the update check finds the newer one"
-        default: "v0.1.4"
+        description: "Older release to install first, so the update check finds the newer one (empty: the one before)"
+        default: ""
       try_install:
         description: "Also click install in the update banner"
         type: boolean
@@ -37,7 +40,7 @@ jobs:
             kind: appimage
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           sparse-checkout: scripts
       - name: Install test tools
@@ -50,6 +53,25 @@ jobs:
             sudo apt-get install -y libegl1 libgl1
             sudo apt-get install -y libfuse2t64 2>/dev/null || sudo apt-get install -y libfuse2
           fi
+      - name: Pick the releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          PREVIOUS: ${{ inputs.previous }}
+        run: |
+          gh release list -R "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
+            --limit 100 --json tagName,publishedAt > releases.json
+          [ -n "$TAG" ] || TAG=$(jq -r 'sort_by(.publishedAt) | last | .tagName // empty' releases.json)
+          if [ -z "$PREVIOUS" ]; then
+            PREVIOUS=$(jq -r --arg tag "$TAG" '
+              (map(select(.tagName == $tag)) | first | .publishedAt) as $at
+              | if $at == null then empty else map(select(.publishedAt < $at)) | sort_by(.publishedAt) | last | .tagName // empty end
+            ' releases.json)
+          fi
+          echo "testing $TAG as an update from ${PREVIOUS:-nothing}"
+          [ -n "$TAG" ] && [ -n "$PREVIOUS" ]
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "PREVIOUS=$PREVIOUS" >> "$GITHUB_ENV"
       - name: Download packages
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,8 +80,8 @@ jobs:
             deb) pattern='mdwisp-linux-amd64.deb' ;;
             appimage) pattern='mdwisp-linux-x86_64.AppImage' ;;
           esac
-          gh release download "${{ inputs.previous }}" -R "$GITHUB_REPOSITORY" -p "$pattern" -D prev
-          gh release download "${{ inputs.tag }}" -R "$GITHUB_REPOSITORY" -p "$pattern" -D new
+          gh release download "$PREVIOUS" -R "$GITHUB_REPOSITORY" -p "$pattern" -D prev
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "$pattern" -D new
           ls -la prev new
       - name: Install the older release
         run: |
@@ -99,7 +121,7 @@ jobs:
             # The updater overwrites the running AppImage in place.
             sha256sum prev/*.AppImage new/*.AppImage
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: shots-${{ matrix.kind }}-${{ matrix.os }}

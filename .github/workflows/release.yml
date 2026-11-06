@@ -22,23 +22,62 @@ permissions:
   contents: read
 
 jobs:
+  # Nothing is built, and no secret is touched, unless the tag names the
+  # version in the tree, points at a commit that is on main, and that commit
+  # passed CI. A tag pushed right after a merge waits for CI to finish.
   check:
-    name: Tag matches version
+    name: Tag is releasable
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
     steps:
-      - uses: actions/checkout@v4
-      - name: Compare tag with tauri.conf.json, package.json and Cargo.toml
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Tag matches the version fields
+        run: bash scripts/check-versions.sh "${GITHUB_REF_NAME#v}"
+      - name: Tagged commit is on main
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          conf=$(jq -r .version src-tauri/tauri.conf.json)
-          pkg=$(jq -r .version package.json)
-          cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
-          echo "tag=$tag conf=$conf pkg=$pkg cargo=$cargo"
-          [ "$tag" = "$conf" ] && [ "$tag" = "$pkg" ] && [ "$tag" = "$cargo" ]
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA^{commit}" origin/main; then
+            echo "::error::$GITHUB_REF_NAME does not point at a commit on main"
+            exit 1
+          fi
+      - name: CI passed on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse "$GITHUB_SHA^{commit}")
+          # Up to an hour, checking every 30 seconds. CI on main runs for the
+          # newest commit of each push, so tag that one: a commit that never
+          # had a run of its own is given ten minutes to show one, then fails.
+          for attempt in $(seq 1 120); do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/check-runs?check_name=ci-ok&filter=latest" \
+              --jq '[.check_runs[] | select(.app.slug == "github-actions")] | first | "\(.status) \(.conclusion)"')
+            echo "attempt $attempt: ci-ok is ${state:-missing}"
+            case "$state" in
+              "completed success") exit 0 ;;
+              completed*)
+                echo "::error::CI did not pass on $sha"
+                exit 1 ;;
+              "null null" | "")
+                if [ "$attempt" -ge 20 ]; then
+                  echo "::error::no CI run found for $sha; tag the newest commit on main"
+                  exit 1
+                fi ;;
+            esac
+            sleep 30
+          done
+          echo "::error::CI on $sha did not finish within an hour"
+          exit 1
 
   build:
     name: Build (${{ matrix.name }})
     needs: check
+    # The signing secrets live in this environment, which only v* tags may
+    # use, so a workflow on any other ref cannot read them.
+    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -56,14 +95,16 @@ jobs:
       APPLE_SIGNING: ${{ secrets.APPLE_API_KEY_CONTENT != '' }}
       UPDATER_SIGNING: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
       - name: Linux system dependencies
@@ -161,7 +202,7 @@ jobs:
             esac
           done
           ls -l out
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: installers-${{ matrix.name }}
           path: out/*
@@ -174,10 +215,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           sparse-checkout: scripts
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: installers-*
           merge-multiple: true
