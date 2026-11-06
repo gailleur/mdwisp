@@ -1,5 +1,14 @@
 name: CI
 
+# Every change reaches main through a pull request, and a pull request can
+# only be merged once the `ci-ok` job at the bottom is green. That one job
+# is the required status check: it passes when every job above it passed or
+# was skipped on purpose, so the heavy three-platform build can be skipped
+# for changes that cannot affect the app without leaving the check pending.
+#
+# The run on main after a merge matters too: release.yml refuses to build a
+# tag until `ci-ok` has passed on the tagged commit.
+
 on:
   push:
     branches: [main]
@@ -8,24 +17,60 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request replaces the run before it. Runs on main are
+# keyed by commit and never cancelled, since a release may be waiting on one.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - id: diff
+        name: Does anything outside site/ change?
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # A pull request is checked out as its merge with main, so the
+          # first parent is main as it stands now. When the base cannot be
+          # found (a force push, say) assume the app changed.
+          if [ "$EVENT" = pull_request ]; then base=HEAD^1; else base=$BEFORE; fi
+          app=true
+          if git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git diff --name-only "$base" HEAD
+            if ! git diff --name-only "$base" HEAD | grep -qv '^site/'; then app=false; fi
+          fi
+          echo "app=$app" | tee -a "$GITHUB_OUTPUT"
+
   frontend:
     name: Frontend tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Version fields agree
+        run: bash scripts/check-versions.sh
       - run: pnpm typecheck
+      - run: pnpm lint
       - run: pnpm test
 
   build:
     name: Build (${{ matrix.name }})
-    needs: frontend
+    needs: [changes, frontend]
+    if: needs.changes.outputs.app == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -38,14 +83,17 @@ jobs:
             os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
       - name: Linux system dependencies
@@ -55,11 +103,20 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - run: pnpm install --frozen-lockfile
+      # Formatting does not depend on the platform; one runner is enough.
+      - name: Rust formatting
+        if: runner.os == 'Linux'
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: pnpm tauri build --ci
       # After the build: the shell embeds the frontend bundle it produces.
+      # Clippy runs on all three runners because much of the shell is
+      # platform-specific code that only compiles on its own system.
+      - name: Clippy
+        shell: bash
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - name: Shell unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mdwisp-${{ matrix.name }}
           path: |
@@ -69,3 +126,23 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: ignore
+
+  # The one check the ruleset on main requires. Keep the job name: renaming
+  # it means updating the ruleset, or nothing can be merged.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [changes, frontend, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped on purpose
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "changes, frontend, build: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) exit 1 ;;
+            esac
+          done
