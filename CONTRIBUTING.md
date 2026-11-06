@@ -39,7 +39,9 @@ and fill in the checklist. It can be merged once two things are true:
   a fork wait for the maintainer to start them.
 - **The maintainer approved it.** Every file is owned by @jfgailleur in
   `.github/CODEOWNERS`, and `main` requires the code owner's approval. A
-  new push dismisses an earlier approval.
+  new push dismisses an earlier approval. Nobody can approve their own pull
+  request, so the maintainer merges their own with the administrator bypass
+  (`gh pr merge --admin`), which skips the approval but never `ci-ok`.
 
 Keep commits focused and describe *why* in the message. Dependency updates
 arrive as weekly Dependabot pull requests and go through the same gate.
