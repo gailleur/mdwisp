@@ -25,8 +25,10 @@ Installers for the latest release, from the [GitHub releases](https://github.com
 The same links are on [mdwisp.com](https://mdwisp.com), a static page served
 from the `site/` folder of this repository.
 
-See [docs/spec.md](docs/spec.md) for the product specification and
-[docs/architecture.md](docs/architecture.md) for how it is built.
+See [docs/spec.md](docs/spec.md) for the product specification,
+[docs/architecture.md](docs/architecture.md) for how it is built and
+[docs/credentials.md](docs/credentials.md) for every key, secret and
+endpoint the project depends on.
 
 ## Development
 

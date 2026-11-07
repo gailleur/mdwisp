@@ -84,10 +84,11 @@ Windows, writes `SHA256SUMS`, and opens a *draft* GitHub release holding all
 of them. Publishing the draft is manual. The macOS build is signed with the
 Developer ID certificate and notarized by Apple from the `APPLE_*` secrets;
 Tauri does the signing, submission and stapling itself, and the workflow
-re-checks the result with `codesign`, `spctl` and `stapler`. The signing
-secrets belong to the `release` environment, which only `v*` tags may use,
-so a workflow on a branch cannot read them. Forks without the secrets get
-an unsigned build. Windows builds are unsigned; the README explains how to
+re-checks the result with `codesign`, `spctl` and `stapler`. The release
+job runs in the `release` environment, which only `v*` tags may use; the
+signing secrets are meant to live there but are still repository secrets
+today, so `docs/credentials.md` lists every one of them, where it lives and
+how to move it. Forks never receive secrets and get an unsigned build. Windows builds are unsigned; the README explains how to
 open them.
 
 Publishing the release starts two more workflows. `linux-smoke.yml`
