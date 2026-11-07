@@ -74,17 +74,14 @@ to the `release` environment, which only `v*` tags may use. That
 environment exists and has the tag rule, but it holds **no secrets**: the
 fourteen above are repository secrets, readable by any workflow run on any
 branch of this repository, not only by tag builds. Moving them is the one
-piece of housekeeping this file asks for:
+piece of housekeeping this file asks for, and only the maintainer can do
+it, since GitHub never reads a secret back:
 
 1. Settings → Environments → `release` → Add secret, for each of the
-   fourteen names, with the same value.
+   fourteen names, with the same value (or `gh secret set NAME --env
+   release` from a machine that has the value).
 2. Delete the repository-level copies.
-3. Make the tag rule mean something: anyone with write access could
-   otherwise push a `v99.0.0` tag at a branch whose workflow exfiltrates
-   the secrets. Either add a required reviewer on the `release`
-   environment (the maintainer approves each tag build), or add a tag
-   ruleset that restricts creating `v*` tags to the admin.
-4. Run `release.yml` on the next tag and `appstore.yml` by hand to confirm.
+3. Run `release.yml` on the next tag and `appstore.yml` by hand to confirm.
 
 No workflow change is needed: both jobs already declare
 `environment: release`, and GitHub resolves `secrets.X` from the environment
@@ -96,6 +93,9 @@ overstate the control; what protects the secrets today is the list below.
 
 - Forks never receive secrets, and every external contributor's workflow
   run needs manual approval (`approval_policy: all_external_contributors`).
+- A tag ruleset lets only the repository admin create, move or delete
+  `v*` tags, so nobody else can start a build that runs in the `release`
+  environment (added 7 November 2026).
 - The repository has one admin (`jfgailleur`) and one read-only collaborator.
 - `main` requires a pull request approved by the code owner plus the `ci-ok`
   check; a malicious workflow edit cannot land without the maintainer.
@@ -144,13 +144,13 @@ there in plain text, which is public information.
 
 | Item | Value or location |
 |---|---|
-| Team | `jf-gailleurs-projects` (`team_LiWj1vw3pB916mvt5Yd2Pk3b`) |
-| Project | `mdwisp` (`prj_PKKdu1dhgFfwWpeMYugIRGHOwtSp`), root directory `site/`, Node 24 |
+| Team | `jf-gailleurs-projects` |
+| Project | `mdwisp`, root directory `site/`, Node 24 |
 | Domains | `mdwisp.com` (production), `www.mdwisp.com` (308 to apex), `mdwisp.vercel.app` |
 | Environment variables | none, in any environment |
 | Deployment protection | Vercel Authentication on every preview URL; production custom domains public |
 | Firewall | Vercel defaults only; no custom rules |
-| Local link | `site/.vercel/project.json`, ignored by git, holds only the two ids above |
+| Local link | `site/.vercel/project.json`, ignored by git, holds only the team and project ids |
 
 The site needs no credential at runtime. Both serverless functions call
 GitHub's public, unauthenticated endpoints (60 requests per hour per IP,
@@ -160,11 +160,13 @@ environment variable named for example `GITHUB_TOKEN`, read in
 `site/api/*.js` and sent as `Authorization: Bearer`; it would be the
 site's first secret, and this file should say so when it happens.
 
-DNS for `mdwisp.com` is at the registrar and points at Vercel's anycast
-addresses. The zone has no MX, SPF or DMARC record: no mail is sent from
-the domain, and the site lists no `@mdwisp.com` address. Adding
-`v=spf1 -all` and a `p=reject` DMARC record would stop anyone else from
-sending mail that claims to be from it; cheap and worth doing.
+DNS for `mdwisp.com` is hosted by Vercel (`ns1`/`ns2.vercel-dns.com`) and
+managed from the Vercel dashboard or the `vercel dns` CLI. No mail is sent
+from the domain and the site lists no `@mdwisp.com` address, so the zone
+has no MX record and, since 7 November 2026, says so: a `v=spf1 -all` TXT
+record at the apex and a `v=DMARC1; p=reject; sp=reject` record at
+`_dmarc`, so receivers reject anything that claims to come from the domain
+or a subdomain. If the project ever sends mail, replace both.
 
 ## Public keys and fixed endpoints
 
