@@ -79,11 +79,18 @@ piece of housekeeping this file asks for:
 1. Settings → Environments → `release` → Add secret, for each of the
    fourteen names, with the same value.
 2. Delete the repository-level copies.
-3. Run `release.yml` on the next tag and `appstore.yml` by hand to confirm.
+3. Make the tag rule mean something: anyone with write access could
+   otherwise push a `v99.0.0` tag at a branch whose workflow exfiltrates
+   the secrets. Either add a required reviewer on the `release`
+   environment (the maintainer approves each tag build), or add a tag
+   ruleset that restricts creating `v*` tags to the admin.
+4. Run `release.yml` on the next tag and `appstore.yml` by hand to confirm.
 
 No workflow change is needed: both jobs already declare
 `environment: release`, and GitHub resolves `secrets.X` from the environment
-first.
+first. Until this is done, the comments in `release.yml` and
+`appstore.yml` and the "Release" section of `docs/architecture.md`
+overstate the control; what protects the secrets today is the list below.
 
 ### What protects them today
 
