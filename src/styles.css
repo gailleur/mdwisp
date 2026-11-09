@@ -789,7 +789,14 @@ body.is-resizing .viewer {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
+}
+
+.status__path:disabled {
+  background: transparent;
+  color: var(--muted);
 }
 
 .status__button--block::after {
