@@ -13,7 +13,7 @@ import type { InlineMath } from "mdast-util-math";
 import { unified, type Plugin } from "unified";
 import { visit } from "unist-util-visit";
 
-import { sanitizeHtml } from "./sanitize";
+import { sanitize } from "./sanitize";
 
 export interface RenderContext {
   /** Directory of the document; relative images resolve against it. */
@@ -29,6 +29,8 @@ export interface RenderContext {
 export interface RenderResult {
   /** Text of the first `h1`, if any. */
   title: string | null;
+  /** Remote images and diagrams withheld because remote content is off. */
+  remoteBlocked: number;
 }
 
 const EXTERNAL = /^(https?:|mailto:|tel:)/i;
@@ -177,6 +179,15 @@ function setDiagramFallback(figure: HTMLElement, source: string, message: string
   figure.replaceChildren(status, pre);
 }
 
+// Mermaid source that would make the webview fetch while rendering: the
+// image shape (`A@{ img: "https://…" }`), and CSS in an init directive.
+const DIAGRAM_FETCHES = /\bimg\s*:|\burl\s*\(|image-set\s*\(|@import/i;
+
+/** True when rendering this Mermaid source could load something remote. */
+export function diagramReferencesRemote(source: string): boolean {
+  return DIAGRAM_FETCHES.test(source);
+}
+
 let diagramGeneration = 0;
 
 /**
@@ -230,19 +241,32 @@ export async function renderDiagrams(root: HTMLElement, theme: "light" | "dark")
   );
 }
 
-function collectDiagrams(root: HTMLElement): void {
+/**
+ * Turns Mermaid code blocks into figures for `renderDiagrams`. A diagram
+ * that could fetch is held back (shown as source) unless remote content is
+ * allowed; returns how many were held.
+ */
+function collectDiagrams(root: HTMLElement, allowRemote: boolean): number {
+  let held = 0;
   for (const code of Array.from(root.querySelectorAll("pre > code")).filter(isMermaidBlock)) {
     const pre = code.parentElement;
     if (!pre) continue;
+    const source = code.textContent ?? "";
     const figure = document.createElement("figure");
     figure.className = "diagram";
-    figure.dataset["source"] = code.textContent ?? "";
+    pre.replaceWith(figure);
+    if (!allowRemote && diagramReferencesRemote(source)) {
+      held += 1;
+      setDiagramFallback(figure, source, "Diagram not rendered: it references remote content. Load remote images to render it.");
+      continue;
+    }
+    figure.dataset["source"] = source;
     const status = document.createElement("p");
     status.className = "diagram__status";
     status.textContent = "Rendering diagram…";
     figure.appendChild(status);
-    pre.replaceWith(figure);
   }
+  return held;
 }
 
 function addCopyControls(root: HTMLElement): void {
@@ -270,7 +294,7 @@ export async function renderDocument(
   markdown: string,
   ctx: RenderContext,
 ): Promise<RenderResult> {
-  const html = sanitizeHtml(await markdownToHtml(markdown), { allowRemoteImages: ctx.allowRemoteImages });
+  const { html, remoteBlocked } = sanitize(await markdownToHtml(markdown), { allowRemoteImages: ctx.allowRemoteImages });
   container.innerHTML = html || "<p></p>";
 
   resolveImages(container, ctx);
@@ -279,11 +303,11 @@ export async function renderDocument(
   // Maths first: its blocks arrive as `pre > code` and must not get a copy
   // button or be mistaken for a diagram.
   await renderMath(container);
-  collectDiagrams(container);
+  const heldDiagrams = collectDiagrams(container, ctx.allowRemoteImages);
   addCopyControls(container);
   void renderDiagrams(container, ctx.theme());
 
   const heading = container.querySelector("h1");
   const title = heading?.textContent?.trim() || null;
-  return { title };
+  return { title, remoteBlocked: remoteBlocked + heldDiagrams };
 }

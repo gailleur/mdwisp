@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { isExternalHref, isMarkdownHref, markdownToHtml, renderDocument, resolveRelative } from "./render";
+import { diagramReferencesRemote, isExternalHref, isMarkdownHref, markdownToHtml, renderDocument, resolveRelative } from "./render";
 
 const ctx = {
   dir: "/docs",
@@ -112,9 +112,43 @@ describe("renderDocument", () => {
     expect(figure?.getAttribute("data-source")).toContain("A-->B");
   });
 
+  it("holds back a diagram that could fetch until remote images are allowed", async () => {
+    const source = "```mermaid\nflowchart TD\n  A@{ img: \"https://t/x.png\", label: \"x\" }\n  A --> B\n```\n";
+    const container = document.createElement("div");
+    const blocked = await renderDocument(container, source, { ...ctx, allowRemoteImages: false });
+    expect(blocked.remoteBlocked).toBe(1);
+    const figure = container.querySelector("figure.diagram");
+    expect(figure?.classList.contains("diagram--error")).toBe(true);
+    expect(figure?.hasAttribute("data-source")).toBe(false);
+    expect(figure?.textContent).toContain("remote content");
+    expect(figure?.querySelector("code")?.textContent).toContain("A@{ img:");
+
+    const allowed = await renderDocument(container, source, ctx);
+    expect(allowed.remoteBlocked).toBe(0);
+    expect(container.querySelector("figure.diagram")?.getAttribute("data-source")).toContain("A@{ img:");
+  });
+
+  it("counts withheld remote images for the banner", async () => {
+    const container = document.createElement("div");
+    const result = await renderDocument(container, "![](https://t/a.png) ![](b.png)\n", { ...ctx, allowRemoteImages: false });
+    expect(result.remoteBlocked).toBe(1);
+    expect(container.querySelectorAll("img[data-blocked-src]").length).toBe(1);
+  });
+
   it("uses the file name when there is no h1", async () => {
     const container = document.createElement("div");
     const result = await renderDocument(container, "just text", ctx);
     expect(result.title).toBeNull();
+  });
+});
+
+
+describe("diagramReferencesRemote", () => {
+  it("flags the image shape and CSS that fetches, not ordinary diagrams", () => {
+    expect(diagramReferencesRemote('flowchart TD\n A@{ img: "https://t/x.png" }')).toBe(true);
+    expect(diagramReferencesRemote("%%{init: {'themeCSS': '.x{background:url(https://t/x.png)}'}}%%\ngraph TD; A-->B")).toBe(true);
+    expect(diagramReferencesRemote("%%{init: {'themeCSS': '@import \"https://t/x.css\"'}}%%\ngraph TD; A-->B")).toBe(true);
+    expect(diagramReferencesRemote("graph TD; A-->B")).toBe(false);
+    expect(diagramReferencesRemote("sequenceDiagram\n Alice->>Bob: see https://example.com")).toBe(false);
   });
 });

@@ -74,6 +74,8 @@ export interface Tab {
   conflict: boolean;
   /** A preview tab: replaced by the next preview unless it is kept. */
   preview: boolean;
+  /** The user chose to load this document's remote images (not persisted). */
+  allowRemote: boolean;
   button: HTMLButtonElement;
   panel: HTMLElement;
   article: HTMLElement;
@@ -397,11 +399,9 @@ export class Tabs {
     if (this.active) void this.reloadFromDisk(this.active);
   }
 
-  /** Re-renders reading views after a settings change. */
+  /** Re-renders reading views and re-applies settings to editors. */
   async rerenderAll(): Promise<void> {
-    for (const tab of this.tabs) {
-      if (tab.mode === "view") await this.renderView(tab, { restoreScroll: true });
-    }
+    for (const tab of this.tabs) await this.refreshRemote(tab);
   }
 
   retheme(): void {
@@ -517,7 +517,7 @@ export class Tabs {
     const baseline = normalise(raw);
     return {
       path, name, dir, sandboxed: false, title: name, mode: "view", dirty: false, conflict: false, preview: false,
-      button, panel, article, banner, text: baseline.text, baseline,
+      allowRemote: false, button, panel, article, banner, text: baseline.text, baseline,
       wysiwyg: null, source: null, unwatch: null, busy: null, autosaveTimer: null,
     };
   }
@@ -569,11 +569,14 @@ export class Tabs {
         tab.wysiwyg = await createWysiwyg(tab.article, tab.text, {
           dir: tab.dir,
           assetUrl: this.host.assetUrl,
+          allowRemoteImages: () => this.remoteAllowed(tab),
           onChange: () => this.onEdit(tab),
         });
         if (anchor) tab.wysiwyg.selectBlockContaining(anchor);
+        this.reflectRemote(tab, tab.wysiwyg.blockedRemoteImages());
       } else {
         tab.article.className = "source-host";
+        if (!tab.conflict) this.hideBanner(tab);
         const { createSource } = await loadSource();
         tab.source = createSource(tab.article, tab.text, {
           dark: this.host.theme() === "dark",
@@ -600,7 +603,7 @@ export class Tabs {
 
     const ctx: RenderContext = {
       dir: tab.dir ?? "",
-      allowRemoteImages: this.host.allowRemoteImages(),
+      allowRemoteImages: this.remoteAllowed(tab),
       assetUrl: this.host.assetUrl,
       theme: this.host.theme,
       onLocalImageError: tab.sandboxed ? () => this.host.onFolderUnreadable?.(tab) : undefined,
@@ -608,6 +611,7 @@ export class Tabs {
     const result = await renderDocument(tab.article, tab.text, ctx);
     tab.title = result.title ?? tab.name;
     this.refreshTitle(tab);
+    this.reflectRemote(tab, result.remoteBlocked);
 
     if (this.active === tab && options.restoreScroll) {
       const restore = () => {
@@ -726,6 +730,36 @@ export class Tabs {
     else if (tab.mode === "wysiwyg") tab.wysiwyg?.setMarkdown(tab.text);
     else tab.source?.setText(tab.text);
     this.updateDirty(tab);
+  }
+
+  /** Remote images load when allowed everywhere (View menu) or for this document (banner). */
+  private remoteAllowed(tab: Tab): boolean {
+    return this.host.allowRemoteImages() || tab.allowRemote;
+  }
+
+  /** Applies the current remote-image setting to a tab in whatever mode it is in. */
+  private async refreshRemote(tab: Tab): Promise<void> {
+    if (tab.mode === "view") await this.renderView(tab, { restoreScroll: true });
+    else if (tab.mode === "wysiwyg" && tab.wysiwyg) {
+      tab.wysiwyg.refreshImages();
+      this.reflectRemote(tab, tab.wysiwyg.blockedRemoteImages());
+    }
+  }
+
+  /**
+   * Shows, or clears, the banner that offers to load a document's remote
+   * images. A disk-conflict banner takes precedence.
+   */
+  private reflectRemote(tab: Tab, blocked: number): void {
+    if (tab.conflict) return;
+    if (blocked > 0 && !this.remoteAllowed(tab)) {
+      const what = blocked === 1 ? "1 remote image" : `${blocked} remote images`;
+      this.showBanner(tab, `This document references ${what}. Loading them tells their hosts you opened it.`, [
+        ["Load remote images", () => { tab.allowRemote = true; void this.refreshRemote(tab); }],
+      ]);
+    } else {
+      this.hideBanner(tab);
+    }
   }
 
   private showBanner(tab: Tab, message: string, actions: Array<[string, () => void]>): void {

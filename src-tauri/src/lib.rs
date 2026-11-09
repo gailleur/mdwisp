@@ -291,10 +291,14 @@ fn save_document<R: Runtime>(
 
     // Inside the App Sandbox a save grants access to the chosen file only,
     // so the temp file beside it cannot be created; write in place then.
-    let temp = dir.join(format!(".{name}.mdwisp-{}.tmp", std::process::id()));
-    match std::fs::write(&temp, text.as_bytes()) {
-        Ok(()) => {
-            if let Err(error) = std::fs::rename(&temp, &target) {
+    match create_temp_beside(&dir, &name) {
+        Ok((temp, mut file)) => {
+            use std::io::Write;
+            let written = file
+                .write_all(text.as_bytes())
+                .and_then(|()| file.sync_all());
+            drop(file);
+            if let Err(error) = written.and_then(|()| std::fs::rename(&temp, &target)) {
                 let _ = std::fs::remove_file(&temp);
                 return Err(error.to_string());
             }
@@ -317,6 +321,41 @@ fn save_document<R: Runtime>(
         name,
         dir: dir.to_string_lossy().into_owned(),
     })
+}
+
+/// Creates a brand-new temporary file beside the document for an atomic
+/// save and returns it open for writing. `create_new` refuses any path that
+/// already exists, a symlink included, so a file someone planted under a
+/// guessable name can never receive the document's text; the name carries a
+/// nonce as well, so a planted file costs at most one retry.
+fn create_temp_beside(dir: &Path, name: &str) -> std::io::Result<(PathBuf, std::fs::File)> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let pid = std::process::id();
+    for _ in 0..32 {
+        let clock = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
+        let nonce = clock
+            ^ COUNTER
+                .fetch_add(1, Ordering::Relaxed)
+                .wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        let temp = dir.join(format!(".{name}.mdwisp-{pid}-{nonce:016x}.tmp"));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)
+        {
+            Ok(file) => return Ok((temp, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "could not create a temporary file beside the document",
+    ))
 }
 
 #[tauri::command]
@@ -787,4 +826,51 @@ pub fn run() {
                 let _ = (app, event);
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::create_temp_beside;
+
+    #[test]
+    fn temp_files_are_new_distinct_regular_files() {
+        let dir = std::env::temp_dir().join(format!("mdwisp-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, _) = create_temp_beside(&dir, "note.md").unwrap();
+        let (b, _) = create_temp_beside(&dir, "note.md").unwrap();
+        assert_ne!(a, b);
+        assert!(std::fs::symlink_metadata(&a).unwrap().file_type().is_file());
+        assert!(a
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with(".note.md.mdwisp-"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_at_the_temp_path_is_never_written_through() {
+        let dir = std::env::temp_dir().join(format!("mdwisp-symlink-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let victim = dir.join("victim.txt");
+        std::fs::write(&victim, "untouched").unwrap();
+        // Plant a symlink under every name the next call could pick is
+        // impossible (the nonce), so instead check the primitive itself:
+        // create_new on an existing symlink fails rather than following it.
+        let planted = dir.join(".note.md.mdwisp-planted.tmp");
+        std::os::unix::fs::symlink(&victim, &planted).unwrap();
+        let result = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&planted);
+        assert!(result.is_err());
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "untouched");
+        let (temp, _) = create_temp_beside(&dir, "note.md").unwrap();
+        assert!(std::fs::symlink_metadata(&temp)
+            .unwrap()
+            .file_type()
+            .is_file());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -220,8 +220,15 @@ does, not how any other product does it. All implementation is original.
 - Strict Content Security Policy on the webview: `default-src 'none'`,
   scripts only from the bundle, no `connect-src`, no frames, no objects, no
   forms. Images may load from the bundle, the document's directory, and
-  `data:` URLs. Remote (`http(s)`) images are allowed by default because
-  documents commonly use them; a setting can disable them.
+  `data:` URLs. Remote images are blocked by default: a document that
+  references any shows a banner offering to load them for that document,
+  and *View ▸ Remote Images* allows them everywhere. Only `https` remote
+  images can load at all; the policy never allows plain `http`. The block
+  is structural: media elements, `srcset`, `poster`, `background` and any
+  inline style that calls a fetching CSS function are always removed, the
+  editor withholds a remote `src` before it reaches the DOM, and a Mermaid
+  diagram that could fetch (the image shape, CSS in an init directive) is
+  shown as source until remote images are allowed.
 - Every rendered document passes through an HTML sanitiser that removes
   script, style, event handlers, and any URL scheme other than
   `http`, `https`, `mailto`, `tel`, and relative paths. `file:` and
@@ -238,8 +245,9 @@ does, not how any other product does it. All implementation is original.
   check, no telemetry, no crash reporting, no font or asset CDNs. All assets
   are bundled.
 - Two kinds of network traffic can occur, both only on the user's explicit
-  action: a remote image referenced by a document, which can be switched
-  off; and *Help ▸ Check for Updates…*, which fetches a fixed manifest URL
+  action: a remote image referenced by a document, which loads only after
+  the user allows it (for that document from its banner, or everywhere with
+  *View ▸ Remote Images*); and *Help ▸ Check for Updates…*, which fetches a fixed manifest URL
   carrying no version or identifier, compares locally, and only on a second
   choice downloads and installs a signed release. Nothing runs at launch or
   on a timer. The Mac App Store build points at the store instead.

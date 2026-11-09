@@ -24,6 +24,7 @@ import { trailing } from "@milkdown/kit/plugin/trailing";
 import {
   commonmark,
   createCodeBlockCommand,
+  imageSchema,
   insertHrCommand,
   toggleEmphasisCommand,
   toggleInlineCodeCommand,
@@ -44,10 +45,13 @@ import { callCommand, getMarkdown, replaceAll } from "@milkdown/kit/utils";
 import type { ReplaceEdit } from "./find";
 import { headingLevel, type BlockType, type FormatKind } from "./format";
 import { resolveRelative } from "./render";
+import { isRemoteRef } from "./sanitize";
 
 export interface WysiwygOptions {
   dir: string | null;
   assetUrl: (path: string) => string;
+  /** Read whenever an image is drawn; a remote source is withheld while false. */
+  allowRemoteImages: () => boolean;
   onChange: () => void;
 }
 
@@ -85,12 +89,36 @@ export interface WysiwygEditor {
    */
   replaceRanges(edits: ReplaceEdit[]): number;
   focus(): void;
+  /** Re-applies the remote-image setting to the images on screen. */
+  refreshImages(): void;
+  /** How many images are withheld because remote content is off. */
+  blockedRemoteImages(): number;
   destroy(): Promise<void>;
 }
 
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
 export async function createWysiwyg(container: HTMLElement, markdown: string, options: WysiwygOptions): Promise<WysiwygEditor> {
+  // ProseMirror writes an image node's `src` straight into the DOM, where
+  // the webview would fetch it at once. Keep a remote source out of the
+  // attribute until remote images are allowed; the node itself is untouched,
+  // so what gets serialised never changes.
+  const guardedImage = imageSchema.extendSchema((prev) => (ctx) => {
+    const base = prev(ctx);
+    return {
+      ...base,
+      toDOM: (node) => {
+        const attrs: Record<string, string> = { ...(node.attrs as Record<string, string>) };
+        const src = attrs["src"] ?? "";
+        if (src && isRemoteRef(src) && !options.allowRemoteImages()) {
+          delete attrs["src"];
+          attrs["data-blocked-src"] = src;
+        }
+        return ["img", attrs];
+      },
+    };
+  });
+
   const editor = await Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, container);
@@ -113,6 +141,7 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
       ctx.get(listenerCtx).updated(() => options.onChange());
     })
     .use(commonmark)
+    .use(guardedImage)
     .use(gfm)
     .use(history)
     .use(listener)
@@ -126,13 +155,30 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
   let baseline: ProseNode = view().state.doc;
 
   // ProseMirror renders image sources verbatim; rewrite document-relative
-  // ones to loadable URLs. The node attribute (what gets serialised) is
-  // untouched.
+  // ones to loadable URLs, and apply the remote-image setting to images
+  // already on screen when it changes. The node attribute (what gets
+  // serialised) is untouched.
   const rewriteImages = () => {
-    if (!options.dir) return;
-    for (const img of container.querySelectorAll<HTMLImageElement>("img[src]")) {
+    const allowRemote = options.allowRemoteImages();
+    for (const img of container.querySelectorAll<HTMLImageElement>("img")) {
+      const blocked = img.getAttribute("data-blocked-src");
+      if (blocked !== null) {
+        if (allowRemote) {
+          img.removeAttribute("data-blocked-src");
+          img.setAttribute("src", blocked);
+        }
+        continue;
+      }
       const src = img.getAttribute("src") ?? "";
-      if (!src || HAS_SCHEME.test(src)) continue;
+      if (!src) continue;
+      if (isRemoteRef(src)) {
+        if (!allowRemote) {
+          img.removeAttribute("src");
+          img.setAttribute("data-blocked-src", src);
+        }
+        continue;
+      }
+      if (HAS_SCHEME.test(src) || !options.dir) continue;
       const resolved = resolveRelative(options.dir, src);
       if (resolved) img.setAttribute("src", options.assetUrl(resolved));
     }
@@ -272,6 +318,8 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
 
   return {
     root: container,
+    refreshImages: rewriteImages,
+    blockedRemoteImages: () => container.querySelectorAll("img[data-blocked-src]").length,
     getMarkdown: () => editor.action(getMarkdown()),
     isPristine: () => view().state.doc.eq(baseline),
     setMarkdown: (next) => {
