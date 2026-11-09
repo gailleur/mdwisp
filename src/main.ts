@@ -404,7 +404,7 @@ function boot(): void {
   const savedWidth = readNumber(OUTLINE_WIDTH_KEY);
   if (savedWidth !== null) outline.setWidth(savedWidth);
   body.prepend(outline.element);
-  let allowRemoteImages = readFlag(REMOTE_IMAGES_KEY, true);
+  let allowRemoteImages = readFlag(REMOTE_IMAGES_KEY, false);
   let autosave = readFlag(AUTOSAVE_KEY, false);
   let outlineOpen = readFlag(OUTLINE_KEY, false);
   let filesOpen = readFlag(FILES_KEY, false);

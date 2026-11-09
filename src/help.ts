@@ -100,7 +100,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         "Math ($…$) and Mermaid diagrams render in reading view only. In the editor and source they are plain text you edit by hand.",
         "The editor saves normalised Markdown: “-” bullets, “*” emphasis, fenced code. A document you did not change is written back byte for byte.",
         "Relative images load from the document's folder and its subfolders, nowhere else.",
-        "The app never connects on its own: no automatic update checks, no telemetry. Help ▸ Check for Updates… (also linked from the About box) fetches one small file from mdwisp.com when you choose it and reports the result in a banner at the top; remote images load only while View ▸ Remote Images is on.",
+        "The app never connects on its own: no automatic update checks, no telemetry. Help ▸ Check for Updates… (also linked from the About box) fetches one small file from mdwisp.com when you choose it and reports the result in a banner at the top; remote images load only after you allow them: for one document from its banner, or everywhere with View ▸ Remote Images.",
         "Installing an update relaunches the app as you left it: the same documents, in the same view and place, with the same zoom. Unsaved ones are asked about first.",
         "HTML inside documents is sanitised: scripts, forms, event handlers and external styles are removed.",
         "Find and replace inside the editor need a recent webview. Reading and source modes always find; source mode always replaces.",

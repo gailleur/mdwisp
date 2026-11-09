@@ -9,7 +9,7 @@ import { DEFAULT_FIND_OPTIONS, compilePattern, findMatches } from "./find";
 async function mount(markdown: string) {
   document.body.innerHTML = "<article></article>";
   const container = document.querySelector("article")!;
-  const editor = await createWysiwyg(container, markdown, { dir: null, assetUrl: (path) => path, onChange: () => undefined });
+  const editor = await createWysiwyg(container, markdown, { dir: null, assetUrl: (path) => path, allowRemoteImages: () => true, onChange: () => undefined });
   const ranges = (query: string) => findMatches(container, compilePattern(query, DEFAULT_FIND_OPTIONS)!);
   return { editor, container, ranges };
 }
@@ -41,6 +41,44 @@ describe("WysiwygEditor.replaceRanges", () => {
     stale.selectNodeContents(document.createTextNode("cat"));
     expect(editor.replaceRanges([{ range: first!, text: "" }, { range: stale, text: "x" }])).toBe(1);
     expect(editor.getMarkdown().trim()).toBe("one  two cat");
+    await editor.destroy();
+  });
+});
+
+describe("remote images in the editor", () => {
+  async function mountGuarded(markdown: string, allow: { value: boolean }) {
+    document.body.innerHTML = "<article></article>";
+    const container = document.querySelector("article")!;
+    const editor = await createWysiwyg(container, markdown, {
+      dir: "/docs",
+      assetUrl: (path) => `asset://localhost${path}`,
+      allowRemoteImages: () => allow.value,
+      onChange: () => undefined,
+    });
+    return { editor, container };
+  }
+
+  it("never puts a remote source in the DOM while remote images are off", async () => {
+    const allow = { value: false };
+    const { editor, container } = await mountGuarded("![a](https://t/x.png) ![b](//t/y.png) ![c](pic.png) ![d](data:image/gif;base64,R0lGOD)\n", allow);
+    // ProseMirror pads inline atoms with src-less separator images; ignore those.
+    const imgs = Array.from(container.querySelectorAll("img:not(.ProseMirror-separator)"));
+    expect(imgs.map((img) => img.getAttribute("src"))).toEqual([null, null, "asset://localhost/docs/pic.png", "data:image/gif;base64,R0lGOD"]);
+    expect(imgs[0]?.getAttribute("data-blocked-src")).toBe("https://t/x.png");
+    expect(editor.blockedRemoteImages()).toBe(2);
+    // The document itself still holds the address.
+    expect(editor.getMarkdown()).toContain("https://t/x.png");
+
+    allow.value = true;
+    editor.refreshImages();
+    expect(container.querySelector("img[alt=a]")?.getAttribute("src")).toBe("https://t/x.png");
+    expect(editor.blockedRemoteImages()).toBe(0);
+    await editor.destroy();
+  });
+
+  it("shows remote images when they are allowed", async () => {
+    const { editor, container } = await mountGuarded("![a](https://t/x.png)\n", { value: true });
+    expect(container.querySelector("img[alt=a]")?.getAttribute("src")).toBe("https://t/x.png");
     await editor.destroy();
   });
 });
