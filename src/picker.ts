@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright (c) 2026 Gailleur Labs
 
-// The status-bar block-type picker: a small popup menu listing block kinds.
+// Small popup menus anchored to the status bar: the block-type picker, and
+// the actions on the current file.
 
 import { BLOCK_CHOICES, type BlockType, type FormatKind } from "./format";
 
@@ -10,13 +11,23 @@ export interface Picker {
   close(): void;
 }
 
+export interface MenuItem {
+  label: string;
+  /** Shortcut shown at the right, already formatted for the platform. */
+  key?: string;
+  /** Highlighted as the current choice. */
+  current?: boolean;
+  /** Stored as `data-kind` on the item, for callers and tests. */
+  kind?: string;
+  onPick: () => void;
+}
+
 /**
- * Opens the picker above the status bar. `current` is highlighted; `onPick`
- * receives the chosen kind. The picker closes itself after a pick, on
- * Escape, or on a mousedown outside it (except on `anchor`, whose own click
- * toggles it).
+ * Opens a menu above the status bar, aligned with `anchor`. The menu closes
+ * itself after a pick, on Escape, or on a mousedown outside it (except on
+ * `anchor`, whose own click toggles it).
  */
-export function openBlockPicker(anchor: HTMLElement, current: BlockType | null, onPick: (kind: FormatKind) => void): Picker {
+export function openMenu(anchor: HTMLElement, items: MenuItem[]): Picker {
   const element = document.createElement("div");
   element.className = "popup";
   element.setAttribute("role", "menu");
@@ -37,28 +48,48 @@ export function openBlockPicker(anchor: HTMLElement, current: BlockType | null, 
     }
   };
 
-  for (const [kind, label, key] of BLOCK_CHOICES) {
+  for (const choice of items) {
     const item = document.createElement("button");
     item.type = "button";
     item.className = "popup__item";
     item.setAttribute("role", "menuitem");
-    item.dataset["kind"] = kind;
-    const isCurrent = current === kind || (kind === "bullet" && current === "list");
-    if (isCurrent) item.classList.add("popup__item--current");
-    const kbd = document.createElement("kbd");
-    kbd.textContent = key;
-    item.append(document.createTextNode(label), kbd);
+    if (choice.kind !== undefined) item.dataset["kind"] = choice.kind;
+    if (choice.current) item.classList.add("popup__item--current");
+    item.append(document.createTextNode(choice.label));
+    if (choice.key) {
+      const kbd = document.createElement("kbd");
+      kbd.textContent = choice.key;
+      item.append(kbd);
+    }
     item.addEventListener("click", () => {
       close();
-      onPick(kind);
+      choice.onPick();
     });
     element.appendChild(item);
   }
 
   document.body.appendChild(element);
+  // Line the menu up with its anchor, kept inside the window.
+  const left = anchor.getBoundingClientRect().left;
+  const room = Math.max(window.innerWidth - element.offsetWidth - 8, 8);
+  element.style.left = `${Math.min(Math.max(left, 8), room)}px`;
   document.addEventListener("mousedown", onOutside, true);
   document.addEventListener("keydown", onKey, true);
   (element.querySelector<HTMLButtonElement>(".popup__item--current") ?? element.querySelector<HTMLButtonElement>("button"))?.focus();
 
   return { element, close };
+}
+
+/** The block-type picker: `current` is highlighted; `onPick` receives the chosen kind. */
+export function openBlockPicker(anchor: HTMLElement, current: BlockType | null, onPick: (kind: FormatKind) => void): Picker {
+  return openMenu(
+    anchor,
+    BLOCK_CHOICES.map(([kind, label, key]) => ({
+      label,
+      key,
+      kind,
+      current: current === kind || (kind === "bullet" && current === "list"),
+      onPick: () => onPick(kind),
+    })),
+  );
 }

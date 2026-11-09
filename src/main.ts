@@ -12,7 +12,7 @@ import { keysFor, openHelp, type HelpPanel } from "./help";
 import { rangeForLine } from "./locate";
 import { Outline } from "./outline";
 import { openPalette, type Palette, type PaletteItem } from "./palette";
-import { openBlockPicker, type Picker } from "./picker";
+import { openBlockPicker, openMenu, type Picker } from "./picker";
 import { isExternalHref, isMarkdownHref, resolveRelative } from "./render";
 import { splitPath, type SearchHit } from "./search";
 import { LAST_SESSION_KEY, captureSession, forgetLastSession, readLastSession, restoreSession, saveSession, takeSession } from "./session";
@@ -483,7 +483,8 @@ function boot(): void {
   const blockButton = el("button", "status__button status__button--block");
   blockButton.type = "button";
   blockButton.title = "Block type — click to change";
-  const pathItem = el("span", "status__item status__path");
+  const pathItem = el("button", "status__button status__path");
+  pathItem.type = "button";
   const wordsItem = el("span", "status__item");
   const eolItem = el("span", "status__item");
   status.append(
@@ -552,7 +553,8 @@ function boot(): void {
       modeButton.textContent = `${MODE_LABEL[tab.mode]} ${keysFor(MODE_KEY[tab.mode], isMac)}`;
       modeButton.title = "Click to cycle reading → editor → source";
       pathItem.textContent = tab.path ? displayPath(tab.path) : "unsaved";
-      pathItem.title = tab.path ?? "";
+      pathItem.title = tab.path ? `${tab.path}\nClick for actions on this file` : "Not saved yet";
+      pathItem.disabled = tab.path === null;
       const words = wordCount(tabs.textOf(tab));
       wordsItem.textContent = `${words} words · ${readingTime(words)}`;
       wordsItem.title = `Reading time at ${WORDS_PER_MINUTE} words per minute`;
@@ -674,6 +676,33 @@ function boot(): void {
       refreshCursorState();
       scheduleOutline();
     });
+  });
+
+  // The file name in the status bar opens a small menu of actions on the
+  // file. Right-click opens the same menu instead of the webview's own.
+  const openPathMenu = () => {
+    if (picker && picker.element.isConnected) {
+      closePopup();
+      return;
+    }
+    const tab = tabs.current;
+    const path = tab?.path;
+    if (!tab || !path) return;
+    picker = openMenu(pathItem, [
+      { label: "Reload from Disk", key: keysFor("⌘R", isMac), onPick: () => { picker = null; tabs.reloadActive(); } },
+      {
+        label: `Copy “${tab.name}” as Pathname`,
+        onPick: () => {
+          picker = null;
+          void copyText(path).then(() => toast("pathname copied")).catch((error: unknown) => reportError(`Could not copy: ${String(error)}`));
+        },
+      },
+    ]);
+  };
+  pathItem.addEventListener("click", openPathMenu);
+  pathItem.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    openPathMenu();
   });
 
   document.body.append(find.element);

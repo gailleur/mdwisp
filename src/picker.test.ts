@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BLOCK_CHOICES } from "./format";
-import { openBlockPicker } from "./picker";
+import { openBlockPicker, openMenu } from "./picker";
 
 describe("openBlockPicker", () => {
   let anchor: HTMLButtonElement;
@@ -48,5 +48,29 @@ describe("openBlockPicker", () => {
     const again = openBlockPicker(anchor, null, () => {});
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(document.body.contains(again.element)).toBe(false);
+  });
+});
+
+describe("openMenu", () => {
+  it("shows the given items with their shortcuts, fires a pick and closes", () => {
+    document.body.innerHTML = "";
+    const anchor = document.createElement("button");
+    document.body.appendChild(anchor);
+    const onReload = vi.fn();
+    const onCopy = vi.fn();
+    const menu = openMenu(anchor, [
+      { label: "Reload from Disk", key: "⌘R", onPick: onReload },
+      { label: "Copy “notes.md” as Pathname", onPick: onCopy },
+    ]);
+    const items = menu.element.querySelectorAll<HTMLButtonElement>(".popup__item");
+    expect(items.length).toBe(2);
+    expect(items[0]?.textContent).toBe("Reload from Disk⌘R");
+    expect(items[0]?.querySelector("kbd")?.textContent).toBe("⌘R");
+    expect(items[1]?.textContent).toBe("Copy “notes.md” as Pathname");
+    expect(items[1]?.querySelector("kbd")).toBeNull();
+    items[1]?.click();
+    expect(onCopy).toHaveBeenCalledTimes(1);
+    expect(onReload).not.toHaveBeenCalled();
+    expect(document.body.contains(menu.element)).toBe(false);
   });
 });
