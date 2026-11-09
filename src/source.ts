@@ -31,6 +31,8 @@ export interface SourceEditor {
   blockType(): BlockType;
   setDark(dark: boolean): void;
   openSearch(): void;
+  /** Opens the search panel with the focus in its replace field when there is a query. */
+  openReplace(): void;
   focus(): void;
   destroy(): void;
 }
@@ -211,6 +213,18 @@ export function createSource(container: HTMLElement, text: string, options: Sour
     blockType,
     setDark: (dark) => view.dispatch({ effects: darkness.reconfigure(darkTheme(dark)) }),
     openSearch: () => openSearchPanel(view),
+    openReplace: () => {
+      openSearchPanel(view);
+      // CodeMirror's panel already replaces (with case, regex and word
+      // options); only the focus differs from find.
+      const panel = view.dom.querySelector(".cm-search");
+      const query = panel?.querySelector<HTMLInputElement>("input[name=search]");
+      const replace = panel?.querySelector<HTMLInputElement>("input[name=replace]");
+      if (query?.value && replace) {
+        replace.focus();
+        replace.select();
+      }
+    },
     focus: () => view.focus(),
     destroy: () => view.destroy(),
   };
