@@ -124,3 +124,24 @@ describe("front matter in the editor", () => {
     await editor.destroy();
   });
 });
+
+describe("pristine check", () => {
+  it("is structural, survives the trailing paragraph the editor adds, and comes back after undo", async () => {
+    const { editor, container } = await mount("```\ncode\n```\n");
+    // jsdom lacks the layout APIs ProseMirror probes when it scrolls.
+    Element.prototype.scrollIntoView = () => undefined;
+    Object.defineProperty(HTMLElement.prototype, "getClientRects", { value: () => [] as unknown as DOMRectList, configurable: true });
+    Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+    Range.prototype.getBoundingClientRect = () => new DOMRect();
+    expect(editor.isPristine()).toBe(true);
+    // A selection-only transaction lets the trailing plugin append its empty paragraph.
+    editor.goTo(0);
+    expect(editor.isPristine()).toBe(true);
+    editor.format("hr");
+    expect(editor.isPristine()).toBe(false);
+    const dom = container.querySelector<HTMLElement>(".ProseMirror")!;
+    dom.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(editor.isPristine()).toBe(true);
+    await editor.destroy();
+  });
+});

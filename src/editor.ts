@@ -197,6 +197,17 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
   const view = (): EditorView => editor.action((ctx) => ctx.get(editorViewCtx));
   let baseline: ProseNode = view().state.doc;
 
+  // Structural equality, which ProseMirror makes cheap because unchanged
+  // nodes are shared, is the whole pristine check: nothing is serialised
+  // on the edit path. The trailing plugin may add an empty paragraph after
+  // the first transaction, which serialises to nothing, so it is ignored.
+  const content = (doc: ProseNode) => {
+    const last = doc.lastChild;
+    const blank = last !== null && last.type.name === "paragraph" && last.content.size === 0 && doc.childCount > 1;
+    return blank ? doc.content.cut(0, doc.content.size - last.nodeSize) : doc.content;
+  };
+  const pristine = () => content(view().state.doc).eq(content(baseline)) && currentMatter() === matter;
+
   // ProseMirror renders image sources verbatim; rewrite document-relative
   // ones to loadable URLs, and apply the remote-image setting to images
   // already on screen when it changes. The node attribute (what gets
@@ -364,7 +375,7 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
     refreshImages: rewriteImages,
     blockedRemoteImages: () => container.querySelectorAll("img[data-blocked-src]").length,
     getMarkdown: markdownOut,
-    isPristine: () => view().state.doc.eq(baseline) && currentMatter() === matter,
+    isPristine: pristine,
     setMarkdown: (next) => {
       const split = splitFrontMatter(next);
       showMatter(split);
