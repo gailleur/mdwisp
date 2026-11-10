@@ -151,4 +151,29 @@ describe("diagramReferencesRemote", () => {
     expect(diagramReferencesRemote("graph TD; A-->B")).toBe(false);
     expect(diagramReferencesRemote("sequenceDiagram\n Alice->>Bob: see https://example.com")).toBe(false);
   });
+
+});
+
+describe("front matter", () => {
+  it("shows front matter as a collapsed panel instead of a rule and a heading", async () => {
+    document.body.innerHTML = "<article></article>";
+    const article = document.querySelector("article") as HTMLElement;
+    const result = await renderDocument(article, "---\ntitle: \"Hello\"\ntags:\n  - a\n  - b\n---\n\n# Hello\n", ctx);
+    const panel = article.querySelector("details.frontmatter");
+    expect(panel).not.toBeNull();
+    expect(article.firstElementChild).toBe(panel);
+    expect(panel?.querySelector("summary")?.textContent).toBe("YAML front matter · title: \"Hello\" · 1 more");
+    expect(Array.from(panel?.querySelectorAll("dt") ?? []).map((e) => e.textContent)).toEqual(["title", "tags"]);
+    expect(article.querySelector("hr")).toBeNull();
+    expect(article.querySelector("h2")).toBeNull();
+    expect(result.title).toBe("Hello");
+  });
+
+  it("names the tab after the front matter title when there is no h1", async () => {
+    document.body.innerHTML = "<article></article>";
+    const article = document.querySelector("article") as HTMLElement;
+    const result = await renderDocument(article, "+++\ntitle = 'From TOML'\n+++\n\ntext\n", ctx);
+    expect(result.title).toBe("From TOML");
+    expect(article.querySelector("p")?.textContent).toBe("text");
+  });
 });

@@ -1541,6 +1541,84 @@ body.is-resizing .viewer {
   -webkit-user-select: text;
 }
 
+/* Front matter: a collapsed panel in the reading view, a plain field in the editor. */
+.frontmatter {
+  margin: 0 0 28px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--elevated);
+  color: var(--muted);
+  font: 12.5px/1.5 var(--mono);
+}
+
+.frontmatter__summary {
+  padding: 6px 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.frontmatter__summary:hover {
+  color: var(--strong);
+}
+
+.frontmatter__fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 14px;
+  margin: 0;
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--line);
+}
+
+.frontmatter__fields dt {
+  color: var(--strong);
+}
+
+.frontmatter__fields dd {
+  margin: 0;
+  color: var(--fg);
+  white-space: pre-wrap;
+}
+
+.frontmatter--editor {
+  box-sizing: border-box;
+  width: calc(100% - 64px);
+  max-width: 676px;
+  margin: 44px auto 0;
+}
+
+.frontmatter--editor[hidden] {
+  display: none;
+}
+
+.frontmatter__label {
+  display: block;
+  padding: 6px 10px 0;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.frontmatter__editor {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 4px;
+  padding: 0 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: 12.5px/1.5 var(--mono);
+  resize: none;
+  outline: none;
+}
+
+/* With a front matter field above it, the editor's top padding would double. */
+.editor-host .frontmatter--editor:not([hidden]) ~ * .ProseMirror {
+  padding-top: 0;
+}
+
 .editor-host .ProseMirror > p:only-child:empty::before {
   content: "Start writing…";
   float: left;

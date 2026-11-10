@@ -43,6 +43,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
       notes: [
         "Autosave writes a second after each change. Off by default; the status bar shows “autosave on/off” and clicking it toggles, as does File ▸ Autosave, which is ticked while on.",
         "A file changed on disk reloads by itself; if you have unsaved edits a banner lets you keep yours or take the disk copy.",
+        "Front matter (a YAML `---`, TOML `+++` or JSON block at the top, as Hugo, Jekyll and Obsidian write it) is shown as a collapsed panel in reading view and as a plain text field above the editor. It is saved back exactly as it was, whatever you edit below it. Source view shows it as text, which is where to add or remove one.",
         "File ▸ Use mdwisp for .md Files makes this the default Markdown app and is ticked while it is. The first launch offers it once; it is never changed without asking.",
         "Print and Export PDF put only the document on paper, with half-inch margins; the outline sidebar and the app chrome stay on screen.",
         "App Store build: the app can only see files you open. When a document shows images from its folder, a banner offers to grant that folder; the grant is remembered.",
