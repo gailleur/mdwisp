@@ -38,6 +38,13 @@ export interface Session {
 
 const MODES: Mode[] = ["view", "wysiwyg", "source"];
 
+/**
+ * Restored tabs that have not been shown yet keep the entry they came
+ * from, so a snapshot taken before they are shown does not lose their
+ * place.
+ */
+const pending = new WeakMap<Tab, SessionTab>();
+
 export interface SessionSurface {
   tabs: Tabs;
   /** The scrolling element behind the reading view. */
@@ -59,6 +66,8 @@ export function captureSession({ tabs, viewer, zoom }: SessionSurface): Session 
 }
 
 function describe(tab: Tab, scrollTop: number | undefined): SessionTab {
+  const kept = tab.deferred ? pending.get(tab) : undefined;
+  if (kept) return { ...kept };
   const entry: SessionTab = { path: tab.path ?? "", mode: tab.mode };
   if (tab.preview) entry.preview = true;
   if (tab.mode === "source" && tab.source) entry.position = tab.source.cursorLine();
@@ -95,20 +104,24 @@ export async function restoreSession(
   { quiet = false, extraInFront = false }: RestoreOptions = {},
 ): Promise<void> {
   setZoom(session.zoom);
-  // Aligned with `session.tabs`, so `session.active` still points right
-  // when a document in between could not be opened.
-  const opened: Array<Tab | undefined> = [];
-  for (const entry of session.tabs) {
-    await tabs.open([entry.path], { preview: entry.preview === true, quiet });
-    const tab = tabs.current;
-    if (!tab || tab.path !== entry.path) {
-      opened.push(undefined);
-      continue;
-    }
-    opened.push(tab);
-    if (entry.mode !== "view") await tabs.setMode(entry.mode);
-    place(tab, entry, viewer);
-  }
+  // Every file is read at once and only the front document is rendered
+  // now; the others render when first shown, each then put back in its
+  // place. `opened` stays aligned with `session.tabs`, so `session.active`
+  // still points right when a document in between could not be opened.
+  const opened = await tabs.restore(
+    session.tabs.map((entry) => ({
+      path: entry.path,
+      mode: entry.mode,
+      preview: entry.preview === true,
+      place: (tab: Tab) => place(tab, entry, viewer),
+    })),
+    session.active,
+    quiet,
+  );
+  opened.forEach((tab, index) => {
+    const entry = session.tabs[index];
+    if (tab?.deferred && entry) pending.set(tab, entry);
+  });
   if (extraInFront && extra.length > 0) {
     // Opening a document that is already there brings it forward.
     await tabs.open(extra);

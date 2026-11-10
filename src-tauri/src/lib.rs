@@ -74,6 +74,43 @@ struct Document {
     /// True inside the App Sandbox, where a document grants access to
     /// itself only and images beside it may fail to load.
     sandboxed: bool,
+    #[serde(flatten)]
+    stat: DocumentStat,
+}
+
+/// Size and modification time of the file as it stands on disk. The
+/// frontend compares these after a watcher event to skip re-reading a
+/// file whose only change was its own save.
+#[derive(Clone, Copy, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DocumentStat {
+    size: u64,
+    /// Milliseconds since the Unix epoch, 0 when the platform has none.
+    modified: f64,
+}
+
+fn stat_of(path: &Path) -> std::io::Result<DocumentStat> {
+    let meta = std::fs::metadata(path)?;
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs_f64() * 1000.0)
+        .unwrap_or(0.0);
+    Ok(DocumentStat {
+        size: meta.len(),
+        modified,
+    })
+}
+
+/// The file's size and modification time, for the own-save check.
+#[tauri::command]
+async fn stat_document(path: String) -> Result<DocumentStat, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        stat_of(Path::new(&path)).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Where granted folders are remembered (App Sandbox only).
@@ -222,8 +259,16 @@ fn queue_files<R: Runtime>(app: &AppHandle<R>, paths: Vec<String>) {
 /// relative images resolve and the file can be watched. Access is never
 /// granted outside directories of documents the user chose to open.
 #[tauri::command]
-fn open_document<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Document, String> {
-    let path = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
+async fn open_document<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Document, String> {
+    // A large file must not hold the main thread: a non-async command
+    // would, and the webview's own event loop with it.
+    tauri::async_runtime::spawn_blocking(move || read_document(&app, &path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn read_document<R: Runtime>(app: &AppHandle<R>, path: &str) -> Result<Document, String> {
+    let path = std::fs::canonicalize(path).map_err(|e| e.to_string())?;
     if !path.is_file() {
         return Err("Not a file.".into());
     }
@@ -236,6 +281,7 @@ fn open_document<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Document
         .ok_or_else(|| "Document has no parent directory.".to_string())?
         .to_path_buf();
 
+    let stat = stat_of(&path).map_err(|e| e.to_string())?;
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let (text, encoding) = encoding::decode(&bytes);
 
@@ -256,6 +302,7 @@ fn open_document<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Document
         path: path.to_string_lossy().into_owned(),
         text,
         encoding,
+        stat,
     })
 }
 
@@ -265,19 +312,32 @@ struct SavedDocument {
     path: String,
     name: String,
     dir: String,
+    #[serde(flatten)]
+    stat: DocumentStat,
 }
 
 /// Writes a document atomically (temp file + rename) so a crash mid-write
 /// never leaves a truncated file, then grants access to its directory as
 /// `open_document` does. Only Markdown extensions may be written.
 #[tauri::command]
-fn save_document<R: Runtime>(
+async fn save_document<R: Runtime>(
     app: AppHandle<R>,
     path: String,
     text: String,
     encoding: encoding::Encoding,
 ) -> Result<SavedDocument, String> {
-    let bytes = encoding::encode(&text, encoding)?;
+    tauri::async_runtime::spawn_blocking(move || write_document(&app, path, &text, encoding))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn write_document<R: Runtime>(
+    app: &AppHandle<R>,
+    path: String,
+    text: &str,
+    encoding: encoding::Encoding,
+) -> Result<SavedDocument, String> {
+    let bytes = encoding::encode(text, encoding)?;
     let requested = PathBuf::from(&path);
     if !looks_like_markdown(&requested) {
         return Err("Only Markdown files can be saved.".into());
@@ -324,6 +384,7 @@ fn save_document<R: Runtime>(
         path: target.to_string_lossy().into_owned(),
         name,
         dir: dir.to_string_lossy().into_owned(),
+        stat: stat_of(&target).unwrap_or_default(),
     })
 }
 
@@ -480,8 +541,13 @@ async fn export_pdf<R: Runtime>(
 /// `Some(true)` when mdwisp already opens Markdown files, `None` where the
 /// platform offers no way to read that.
 #[tauri::command]
-fn default_app_status<R: Runtime>(app: AppHandle<R>) -> Option<bool> {
-    defaults::is_default(&app.config().identifier)
+async fn default_app_status<R: Runtime>(app: AppHandle<R>) -> Option<bool> {
+    // Asks LaunchServices on macOS; off the main thread so launch is not held up.
+    let identifier = app.config().identifier.clone();
+    tauri::async_runtime::spawn_blocking(move || defaults::is_default(&identifier))
+        .await
+        .ok()
+        .flatten()
 }
 
 /// Makes mdwisp the default Markdown app, or opens the system page where
@@ -775,6 +841,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_document,
             save_document,
+            stat_document,
             take_pending_files,
             confirm_close,
             set_menu_checked,

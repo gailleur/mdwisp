@@ -29,7 +29,9 @@ does, not how any other product does it. All implementation is original.
 - Window size and position persist between launches.
 - The documents persist too: a launch reopens the documents that were open
   when the app quit, in the same order, each in the same view and at the
-  same place, with the same zoom and the same one in front. Files the
+  same place, with the same zoom and the same one in front. Every file
+  is read at once, but only the document in front is rendered at launch;
+  the others render when first shown. Files the
   launch itself was asked to open (a double-click in the file manager) are
   added and come to the front. Documents that no longer exist are skipped
   silently; untitled documents are not kept. The snapshot is rewritten

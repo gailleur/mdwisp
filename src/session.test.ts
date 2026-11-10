@@ -138,6 +138,25 @@ describe("session", () => {
     expect(relaunched.current?.path).toBe("/docs/a.md");
   });
 
+  it("a snapshot taken before a restored tab is shown keeps that tab's place", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost());
+    const session = {
+      tabs: [{ path: "/docs/a.md", mode: "view" as const }, { path: "/docs/b.md", mode: "source" as const, position: 3 }],
+      active: 0,
+      zoom: 1,
+    };
+    await restoreSession(session, [], { tabs, viewer }, () => {});
+    const b = tabs.all[1] as Tab;
+    expect(b.source).toBeNull();
+    expect(captureSession({ tabs, viewer, zoom: () => 1 }).tabs[1]).toEqual({ path: "/docs/b.md", mode: "source", position: 3 });
+    tabs.activate(b);
+    await b.busy;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(b.source?.cursorLine()).toBe(3);
+    expect(captureSession({ tabs, viewer, zoom: () => 1 }).tabs[1]).toEqual({ path: "/docs/b.md", mode: "source", position: 3 });
+  });
+
   it("puts the front document back at its place after the later ones have opened", async () => {
     const { strip, viewer } = mount();
     const tabs = new Tabs(strip, viewer, makeHost());

@@ -618,6 +618,7 @@ function boot(): void {
   const tabs = new Tabs(strip, viewer, {
     load: shell.openDocument,
     save: shell.saveDocument,
+    stat: shell.statDocument,
     pickSavePath: shell.pickSavePath,
     confirmDiscard: shell.confirmDiscard,
     confirmClose: shell.confirmClose,

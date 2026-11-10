@@ -25,16 +25,31 @@ export interface ShellDocument {
   encoding: Encoding;
   /** True in the App Store sandbox, where the folder may be unreadable. */
   sandboxed: boolean;
+  size: number;
+  /** Modification time in milliseconds since the epoch. */
+  modified: number;
 }
 
 export function openDocument(path: string): Promise<ShellDocument> {
   return invoke<ShellDocument>("open_document", { path });
 }
 
+export interface DocumentStat {
+  size: number;
+  modified: number;
+}
+
+/** Size and mtime of a file, to tell our own save from a real change. */
+export function statDocument(path: string): Promise<DocumentStat> {
+  return invoke<DocumentStat>("stat_document", { path });
+}
+
 export interface SavedDocument {
   path: string;
   name: string;
   dir: string;
+  size: number;
+  modified: number;
 }
 
 export function saveDocument(path: string, text: string, encoding: Encoding): Promise<SavedDocument> {

@@ -470,6 +470,119 @@ describe("Preview tabs", () => {
     expect(tab.encoding).toBe("utf-8");
   });
 
+  it("restore reads every file at once, renders only the front tab, and renders the others when shown", async () => {
+    const { strip, viewer } = mount();
+    const started: string[] = [];
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const host = makeHost(fs, {
+      load: async (path) => {
+        started.push(path);
+        await gate;
+        const text = fs.files.get(path);
+        if (text === undefined) throw new Error("missing");
+        return { path, name: path.split("/").pop() ?? path, dir: "/docs", text };
+      },
+    });
+    const tabs = new Tabs(strip, viewer, host);
+    const placed: string[] = [];
+    const restoring = tabs.restore(
+      [
+        { path: "/docs/a.md", mode: "source", place: (t) => placed.push(t.path ?? "") },
+        { path: "/docs/b.md", mode: "view", place: (t) => placed.push(t.path ?? "") },
+        { path: "/docs/c.md", mode: "wysiwyg", place: (t) => placed.push(t.path ?? "") },
+      ],
+      1,
+    );
+    await flush();
+    // All three reads were started before any of them finished.
+    expect(started).toEqual(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    release();
+    const opened = await restoring;
+    expect(opened.map((t) => t?.path)).toEqual(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    expect(tabs.current?.path).toBe("/docs/b.md");
+    expect(viewer.querySelector("h1")?.textContent).toBe("B");
+    expect(placed).toEqual(["/docs/b.md"]);
+    // The others carry their mode already but hold no editor and no rendering.
+    const [a, , c] = opened as Tab[];
+    expect([a.mode, c.mode]).toEqual(["source", "wysiwyg"]);
+    expect(a.source).toBeNull();
+    expect(c.wysiwyg).toBeNull();
+    expect(a.article.childElementCount).toBe(0);
+    // Watches were set up without anyone waiting for them.
+    expect([...fs.watchers.keys()].sort()).toEqual(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    // Showing a deferred tab renders it in its mode and places it.
+    tabs.activate(a);
+    await a.busy;
+    await flush();
+    expect(a.source).not.toBeNull();
+    expect(a.source!.getText()).toBe("# A\n");
+    expect(placed).toEqual(["/docs/b.md", "/docs/a.md"]);
+    expect(a.deferred).toBeNull();
+  });
+
+  it("restore reports a missing document, keeps the slot, and reuses a tab already open", async () => {
+    const { strip, viewer } = mount();
+    const errors: string[] = [];
+    const host = makeHost(fs, { onError: (m) => { errors.push(m); } });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/c.md"]);
+    const opened = await tabs.restore([{ path: "/docs/a.md", mode: "view" }, { path: "/docs/gone.md", mode: "view" }, { path: "/docs/c.md", mode: "view" }], 2);
+    expect(opened.map((t) => t?.path)).toEqual(["/docs/a.md", undefined, "/docs/c.md"]);
+    expect(tabs.all.map((t) => t.path)).toEqual(["/docs/c.md", "/docs/a.md"]);
+    expect(errors).toHaveLength(1);
+    expect(tabs.current?.path).toBe("/docs/c.md");
+  });
+
+  it("an edit in the editor never serialises the document just to mark it dirty", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost(fs));
+    await tabs.open(["/docs/a.md"]);
+    await tabs.setMode("wysiwyg");
+    const tab = tabs.current as Tab;
+    const serialise = vi.spyOn(tab.wysiwyg!, "getMarkdown");
+    tab.wysiwyg!.format("h2");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(tab.dirty).toBe(true);
+    expect(serialise).not.toHaveBeenCalled();
+  });
+
+  it("a watcher event that matches our own save is not read back", async () => {
+    const { strip, viewer } = mount();
+    let onDisk = { size: 10, modified: 1000 };
+    const loads: string[] = [];
+    const host = makeHost(fs, {
+      load: async (path) => {
+        loads.push(path);
+        return { path, name: "a.md", dir: "/docs", text: fs.files.get(path) ?? "", ...onDisk };
+      },
+      save: async (path, text) => {
+        fs.files.set(path, text);
+        onDisk = { size: text.length, modified: 2000 };
+        return { path, name: "a.md", dir: "/docs", ...onDisk };
+      },
+      stat: async () => onDisk,
+    });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/a.md"]);
+    const tab = tabs.current as Tab;
+    await tabs.setMode("source");
+    tab.source!.setText("# A2\n");
+    await tabs.save();
+    expect(loads).toEqual(["/docs/a.md"]);
+    // The watcher fires for our write: the stat matches, nothing is read.
+    fs.watchers.get("/docs/a.md")!();
+    await flush();
+    expect(loads).toEqual(["/docs/a.md"]);
+    // A real change on disk is still read.
+    fs.files.set("/docs/a.md", "# A3\n");
+    onDisk = { size: 5, modified: 3000 };
+    fs.watchers.get("/docs/a.md")!();
+    await flush();
+    expect(loads).toEqual(["/docs/a.md", "/docs/a.md"]);
+    expect(tab.text).toBe("# A3\n");
+  });
+
   it("pinAll keeps every preview, and the list reports its changes", async () => {
     const { strip, viewer } = mount();
     const onListChange = vi.fn();

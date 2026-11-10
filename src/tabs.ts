@@ -17,11 +17,20 @@ const loadSource = () => import("./source");
 
 export type Mode = "view" | "wysiwyg" | "source";
 
+/** Size and modification time of the file on disk. */
+export interface DiskStat {
+  size: number;
+  modified: number;
+}
+
 export interface LoadedDocument {
   path: string;
   name: string;
   dir: string;
   text: string;
+  /** How the file stood when it was read, when the shell can tell. */
+  size?: number;
+  modified?: number;
   /** How the bytes were read; UTF-8 when absent. */
   encoding?: Encoding;
   /** True in the App Store sandbox, where the folder may be unreadable. */
@@ -30,7 +39,9 @@ export interface LoadedDocument {
 
 export interface TabHost {
   load: (path: string) => Promise<LoadedDocument>;
-  save: (path: string, text: string, encoding: Encoding) => Promise<{ path: string; name: string; dir: string }>;
+  save: (path: string, text: string, encoding: Encoding) => Promise<{ path: string; name: string; dir: string; size?: number; modified?: number }>;
+  /** Size and mtime of a file, so a watcher event can be matched to our own save. */
+  stat?: (path: string) => Promise<DiskStat | null>;
   pickSavePath: (defaultName: string) => Promise<string | null>;
   confirmDiscard: (message: string) => Promise<boolean>;
   /** Save / Discard / Cancel before a dirty document closes. */
@@ -63,6 +74,15 @@ export interface OpenOptions {
   quiet?: boolean;
 }
 
+/** A document to bring back from a snapshot. */
+export interface RestoreEntry {
+  path: string;
+  mode: Mode;
+  preview?: boolean;
+  /** Runs once the tab is rendered in its mode: cursor or scroll position. */
+  place?: (tab: Tab) => void;
+}
+
 export interface Tab {
   /** Null until an untitled document is saved. */
   path: string | null;
@@ -83,6 +103,14 @@ export interface Tab {
   encoding: Encoding;
   /** What the file on disk holds; differs from `encoding` after a conversion not yet saved. */
   diskEncoding: Encoding;
+  /** The file as last read or written, when the shell reports it. */
+  diskStat: DiskStat | null;
+  /**
+   * A restored tab that has not been shown yet: its text is loaded, but
+   * nothing is rendered until it is activated, so a launch pays for the
+   * document in front only.
+   */
+  deferred: { mode: Mode; place?: (tab: Tab) => void } | null;
   button: HTMLButtonElement;
   panel: HTMLElement;
   article: HTMLElement;
@@ -225,32 +253,117 @@ export class Tabs {
       if (!options.preview) this.pin(tab);
       this.activate(tab);
     };
-    for (const path of paths) {
+    // Every file is asked for at once; the tabs still appear in order.
+    const loads = paths.map((path) => (this.tabs.some((t) => t.path === path) ? null : this.load(path)));
+    for (const [index, path] of paths.entries()) {
       const existing = this.tabs.find((t) => t.path === path);
       if (existing) {
         bringForward(existing);
         continue;
       }
-      try {
-        const doc = await this.host.load(path);
-        const canonical = this.tabs.find((t) => t.path === doc.path);
-        if (canonical) {
-          bringForward(canonical);
-          continue;
-        }
-        const tab = this.createTab(doc.path, doc.name, doc.dir, doc.text, doc.encoding ?? "utf-8");
-        tab.sandboxed = doc.sandboxed === true;
-        // A preview takes the place of the previous one, in the same spot.
-        const replaced = options.preview ? this.tabs.find((t) => t.preview && !t.dirty) : undefined;
-        if (options.preview) this.setPreview(tab, true);
-        this.mount(tab, replaced ? this.tabs.indexOf(replaced) : undefined);
-        if (replaced) await this.close(replaced);
-        await this.showMode(tab, "view", { restoreScroll: false });
-        tab.unwatch = await this.host.watch(doc.path, () => void this.onDiskChange(tab));
-      } catch (error) {
-        if (!options.quiet) this.host.onError(`${path}\n${describe(error)}`);
+      const loaded = await loads[index];
+      if (!loaded || loaded instanceof Error) {
+        if (loaded && !options.quiet) this.host.onError(`${path}\n${describe(loaded)}`);
+        continue;
       }
+      const canonical = this.tabs.find((t) => t.path === loaded.path);
+      if (canonical) {
+        bringForward(canonical);
+        continue;
+      }
+      const tab = this.tabFor(loaded);
+      // A preview takes the place of the previous one, in the same spot.
+      const replaced = options.preview ? this.tabs.find((t) => t.preview && !t.dirty) : undefined;
+      if (options.preview) this.setPreview(tab, true);
+      this.mount(tab, replaced ? this.tabs.indexOf(replaced) : undefined);
+      if (replaced) await this.close(replaced);
+      await this.showMode(tab, "view", { restoreScroll: false });
+      this.watch(tab);
     }
+  }
+
+  /**
+   * Brings a snapshot's documents back: every file is read at once, the
+   * tabs appear in order, and only the one at `active` is rendered now,
+   * in its saved mode. The others render when first activated. Returns
+   * the tabs aligned with `entries`, undefined where a document could not
+   * be opened (reported unless `quiet`).
+   */
+  restore(entries: RestoreEntry[], active: number, quiet = false): Promise<Array<Tab | undefined>> {
+    let result: Array<Tab | undefined> = [];
+    const run = async () => {
+      result = await this.restoreNow(entries, active, quiet);
+    };
+    this.opening = this.opening.then(run, run);
+    return this.opening.then(() => result);
+  }
+
+  private async restoreNow(entries: RestoreEntry[], active: number, quiet: boolean): Promise<Array<Tab | undefined>> {
+    const loads = entries.map((entry) => (this.tabs.some((t) => t.path === entry.path) ? null : this.load(entry.path)));
+    const opened: Array<Tab | undefined> = [];
+    for (const [index, entry] of entries.entries()) {
+      const existing = this.tabs.find((t) => t.path === entry.path);
+      if (existing) {
+        if (!entry.preview) this.pin(existing);
+        opened.push(existing);
+        continue;
+      }
+      const loaded = await loads[index];
+      if (!loaded || loaded instanceof Error) {
+        if (loaded && !quiet) this.host.onError(`${entry.path}\n${describe(loaded)}`);
+        opened.push(undefined);
+        continue;
+      }
+      const canonical = this.tabs.find((t) => t.path === loaded.path);
+      if (canonical) {
+        opened.push(canonical);
+        continue;
+      }
+      const tab = this.tabFor(loaded);
+      if (entry.preview) this.setPreview(tab, true);
+      // The mode is the tab's from the start, so the status bar and the
+      // next snapshot see it before the editor exists.
+      tab.mode = entry.mode;
+      tab.deferred = { mode: entry.mode, place: entry.place };
+      this.mount(tab, undefined, false);
+      this.watch(tab);
+      opened.push(tab);
+    }
+    const front = opened[active] ?? opened.find((t) => t !== undefined);
+    if (front) {
+      this.activate(front);
+      if (front.busy) await front.busy;
+    }
+    return opened;
+  }
+
+  /** Reads a document, returning the error instead of throwing. */
+  private load(path: string): Promise<LoadedDocument | Error> {
+    return this.host.load(path).then(
+      (doc) => doc,
+      (error: unknown) => (error instanceof Error ? error : new Error(describe(error))),
+    );
+  }
+
+  private tabFor(doc: LoadedDocument): Tab {
+    const tab = this.createTab(doc.path, doc.name, doc.dir, doc.text, doc.encoding ?? "utf-8");
+    tab.sandboxed = doc.sandboxed === true;
+    tab.diskStat = statOf(doc);
+    return tab;
+  }
+
+  /** Starts watching the tab's file; nothing waits for the watch to be set up. */
+  private watch(tab: Tab): void {
+    const path = tab.path;
+    if (!path) return;
+    void this.host.watch(path, () => void this.onDiskChange(tab)).then(
+      (unwatch) => {
+        // The tab may have closed, or moved, while the watch was being set up.
+        if (this.tabs.includes(tab) && tab.path === path) tab.unwatch = unwatch;
+        else unwatch();
+      },
+      () => undefined,
+    );
   }
 
   /**
@@ -290,6 +403,12 @@ export class Tabs {
     tab.panel.hidden = false;
     tab.button.scrollIntoView({ block: "nearest", inline: "nearest" });
     this.host.onActiveChange(tab);
+    const deferred = tab.deferred;
+    if (deferred) {
+      tab.deferred = null;
+      void this.showMode(tab, deferred.mode, { restoreScroll: false }).then(() => deferred.place?.(tab));
+      return;
+    }
     this.focusEditor(tab);
   }
 
@@ -397,12 +516,14 @@ export class Tabs {
       tab.baseline = normalise(raw);
       tab.text = tab.baseline.text;
       tab.diskEncoding = tab.encoding;
+      tab.diskStat = statOf(saved);
       tab.conflict = false;
       this.hideBanner(tab);
       this.markClean(tab);
       if (moved) {
         tab.unwatch?.();
-        tab.unwatch = await this.host.watch(saved.path, () => void this.onDiskChange(tab));
+        tab.unwatch = null;
+        this.watch(tab);
       }
       this.refreshTitle(tab);
       return true;
@@ -542,19 +663,19 @@ export class Tabs {
     const baseline = normalise(raw);
     return {
       path, name, dir, sandboxed: false, title: name, mode: "view", dirty: false, conflict: false, preview: false,
-      allowRemote: false, encoding, diskEncoding: encoding, button, panel, article, banner, text: baseline.text, baseline,
+      allowRemote: false, encoding, diskEncoding: encoding, diskStat: null, deferred: null, button, panel, article, banner, text: baseline.text, baseline,
       wysiwyg: null, source: null, unwatch: null, busy: null, autosaveTimer: null,
     };
   }
 
-  /** Adds a tab to the strip, at `index` if given, else at the end, and shows it. */
-  private mount(tab: Tab, index?: number): void {
+  /** Adds a tab to the strip, at `index` if given, else at the end, and shows it unless told not to. */
+  private mount(tab: Tab, index?: number, activate = true): void {
     const before = index === undefined ? undefined : this.tabs[index];
     if (before) this.tabs.splice(index!, 0, tab);
     else this.tabs.push(tab);
     this.strip.insertBefore(tab.button, before ? before.button : null);
     this.viewer.appendChild(tab.panel);
-    this.activate(tab);
+    if (activate) this.activate(tab);
     this.host.onListChange?.();
   }
 
@@ -681,7 +802,9 @@ export class Tabs {
 
   private updateDirty(tab: Tab): void {
     let dirty: boolean;
-    if (tab.mode === "wysiwyg" && tab.wysiwyg) dirty = !tab.wysiwyg.isPristine() && tab.wysiwyg.getMarkdown() !== tab.baseline.text;
+    // The editor's check is structural and cheap; serialising the whole
+    // document here would run on every keystroke.
+    if (tab.mode === "wysiwyg" && tab.wysiwyg) dirty = !tab.wysiwyg.isPristine();
     else if (tab.mode === "source" && tab.source) dirty = tab.source.getText() !== tab.baseline.text;
     else dirty = tab.text !== tab.baseline.text;
     if (tab.encoding !== tab.diskEncoding) dirty = true;
@@ -716,6 +839,12 @@ export class Tabs {
 
   private async onDiskChange(tab: Tab): Promise<void> {
     if (!tab.path) return;
+    // Our own save wakes the watcher too; a size and mtime that match what
+    // we wrote mean there is nothing to read.
+    if (tab.diskStat && this.host.stat) {
+      const now = await this.host.stat(tab.path).catch(() => null);
+      if (now && now.size === tab.diskStat.size && now.modified === tab.diskStat.modified) return;
+    }
     let doc: LoadedDocument;
     try {
       doc = await this.host.load(tab.path);
@@ -723,7 +852,10 @@ export class Tabs {
       return; // Deleted or unreadable; keep what we have.
     }
     const incoming = normalise(doc.text);
-    if (incoming.text === tab.baseline.text) return; // Our own save, or a no-op write.
+    if (incoming.text === tab.baseline.text) {
+      tab.diskStat = statOf(doc);
+      return; // Our own save, or a no-op write.
+    }
 
     if (!tab.dirty) {
       await this.applyDiskText(tab, doc);
@@ -732,7 +864,7 @@ export class Tabs {
     tab.conflict = true;
     this.showBanner(tab, "This file changed on disk while you have unsaved edits.", [
       ["Reload from disk", () => void this.applyDiskText(tab, doc).then(() => { tab.conflict = false; this.hideBanner(tab); })],
-      ["Keep my changes", () => { tab.baseline = incoming; tab.diskEncoding = doc.encoding ?? "utf-8"; tab.conflict = false; this.hideBanner(tab); this.updateDirty(tab); }],
+      ["Keep my changes", () => { tab.baseline = incoming; tab.diskEncoding = doc.encoding ?? "utf-8"; tab.diskStat = statOf(doc); tab.conflict = false; this.hideBanner(tab); this.updateDirty(tab); }],
     ]);
   }
 
@@ -749,11 +881,13 @@ export class Tabs {
     }
   }
 
-  private async applyDiskText(tab: Tab, doc: Pick<LoadedDocument, "text" | "encoding">): Promise<void> {
+  private async applyDiskText(tab: Tab, doc: Pick<LoadedDocument, "text" | "encoding" | "size" | "modified">): Promise<void> {
     tab.baseline = normalise(doc.text);
     tab.text = tab.baseline.text;
     tab.encoding = doc.encoding ?? "utf-8";
     tab.diskEncoding = tab.encoding;
+    tab.diskStat = statOf(doc);
+    if (tab.deferred) return; // Rendered from `tab.text` when first shown.
     if (tab.mode === "view") await this.renderView(tab, { restoreScroll: true });
     else if (tab.mode === "wysiwyg") tab.wysiwyg?.setMarkdown(tab.text);
     else tab.source?.setText(tab.text);
@@ -767,6 +901,7 @@ export class Tabs {
 
   /** Applies the current remote-image setting to a tab in whatever mode it is in. */
   private async refreshRemote(tab: Tab): Promise<void> {
+    if (tab.deferred) return;
     if (tab.mode === "view") await this.renderView(tab, { restoreScroll: true });
     else if (tab.mode === "wysiwyg" && tab.wysiwyg) {
       tab.wysiwyg.refreshImages();
@@ -810,6 +945,10 @@ export class Tabs {
     tab.banner.hidden = true;
     tab.banner.replaceChildren();
   }
+}
+
+function statOf(doc: { size?: number; modified?: number }): DiskStat | null {
+  return doc.size !== undefined && doc.modified !== undefined ? { size: doc.size, modified: doc.modified } : null;
 }
 
 function lastIndexWhere<T>(items: T[], test: (item: T) => boolean): number {
