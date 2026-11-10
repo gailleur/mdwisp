@@ -196,6 +196,12 @@ does, not how any other product does it. All implementation is original.
 - External changes: if the file changes on disk and there are no unsaved
   edits, the buffer reloads. If there are unsaved edits, a banner offers
   "Reload from disk" or "Keep my changes" (the next save overwrites).
+- Front matter: a YAML (`---`), TOML (`+++`) or JSON block at the top of
+  the document is split off before parsing. The reading view shows it as a
+  collapsed panel of its fields (the `title` field names the tab when the
+  document has no `h1`); the editor shows it as a plain text field above
+  the text; source view shows it as it is. It is written back byte for
+  byte unless that field was edited, and never passes through ProseMirror.
 - Round-trip fidelity: a document opened and closed without edits is never
   written; a document edited in the WYSIWYG editor is serialised to
   normalised Markdown, so formatting may change (e.g. `*em*` → `_em_`). The

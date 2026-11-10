@@ -8,6 +8,7 @@ import { COMMANDS, FORMAT_PREFIX, PALETTE_ID, type ActionId } from "./commands";
 import { Explorer } from "./explorer";
 import { FindBar } from "./find";
 import { BLOCK_LABEL, type FormatKind } from "./format";
+import { splitFrontMatter } from "./frontmatter";
 import { keysFor, openHelp, type HelpPanel } from "./help";
 import { rangeForLine } from "./locate";
 import { Outline } from "./outline";
@@ -555,7 +556,7 @@ function boot(): void {
       pathItem.textContent = tab.path ? displayPath(tab.path) : "unsaved";
       pathItem.title = tab.path ? `${tab.path}\nClick for actions on this file` : "Not saved yet";
       pathItem.disabled = tab.path === null;
-      const words = wordCount(tabs.textOf(tab));
+      const words = wordCount(splitFrontMatter(tabs.textOf(tab)).body);
       wordsItem.textContent = `${words} words · ${readingTime(words)}`;
       wordsItem.title = `Reading time at ${WORDS_PER_MINUTE} words per minute`;
       eolItem.textContent = tab.baseline.eol === "\r\n" ? "CRLF" : "LF";

@@ -4,7 +4,9 @@
 // WYSIWYG editing on top of Milkdown (ProseMirror). The editor owns a
 // ProseMirror document; Markdown is produced only on demand. A document that
 // was never changed reports `pristine`, so callers can keep the original
-// bytes instead of re-serialising.
+// bytes instead of re-serialising. Front matter never enters ProseMirror:
+// it is shown in a plain text field above the editor and put back in front
+// of the Markdown, untouched unless that field was edited.
 
 import {
   type CmdKey,
@@ -44,6 +46,7 @@ import { callCommand, getMarkdown, replaceAll } from "@milkdown/kit/utils";
 
 import type { ReplaceEdit } from "./find";
 import { headingLevel, type BlockType, type FormatKind } from "./format";
+import { FORMAT_LABEL, joinFrontMatter, splitFrontMatter, withInner, type FrontMatter, type SplitDocument } from "./frontmatter";
 import { resolveRelative } from "./render";
 import { isRemoteRef } from "./sanitize";
 
@@ -119,10 +122,49 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
     };
   });
 
+  // The front matter field sits above the editor Milkdown appends next.
+  const matterHost = document.createElement("div");
+  matterHost.className = "frontmatter frontmatter--editor";
+  const matterLabel = document.createElement("label");
+  matterLabel.className = "frontmatter__label";
+  const matterCaption = document.createElement("span");
+  const matterField = document.createElement("textarea");
+  matterField.className = "frontmatter__editor";
+  matterField.spellcheck = false;
+  matterField.setAttribute("aria-label", "Front matter");
+  matterLabel.append(matterCaption, matterField);
+  matterHost.append(matterLabel);
+  let matter: FrontMatter | null = null;
+  // The blank lines between the block and the text, which the serialiser
+  // would drop; put back so an edit elsewhere leaves that line alone.
+  let matterGap = "";
+  const fitField = () => {
+    matterField.rows = Math.max(1, matterField.value.split("\n").length);
+  };
+  const showMatter = (split: SplitDocument) => {
+    matter = split.matter;
+    matterGap = matter ? /^\n*/.exec(split.body)?.[0] ?? "" : "";
+    matterHost.hidden = matter === null;
+    matterField.value = matter?.inner ?? "";
+    matterCaption.textContent = matter ? `${FORMAT_LABEL[matter.format]} front matter` : "";
+    fitField();
+  };
+  const currentMatter = (): FrontMatter | null => (matter ? withInner(matter, matterField.value) : null);
+  const markdownOut = (): string => {
+    const body = editor.action(getMarkdown());
+    return matter ? joinFrontMatter(currentMatter(), matterGap + body) : body;
+  };
+  matterField.addEventListener("input", () => {
+    fitField();
+    options.onChange();
+  });
+  const initial = splitFrontMatter(markdown);
+  showMatter(initial);
+
   const editor = await Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, container);
-      ctx.set(defaultValueCtx, markdown);
+      ctx.set(defaultValueCtx, initial.body);
       // Serialise in the most common hand-written style so edits produce
       // small, predictable diffs.
       ctx.update(remarkStringifyOptionsCtx, (prev) => ({
@@ -150,6 +192,7 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
     .use(indent)
     .use(trailing)
     .create();
+  container.prepend(matterHost);
 
   const view = (): EditorView => editor.action((ctx) => ctx.get(editorViewCtx));
   let baseline: ProseNode = view().state.doc;
@@ -320,13 +363,16 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
     root: container,
     refreshImages: rewriteImages,
     blockedRemoteImages: () => container.querySelectorAll("img[data-blocked-src]").length,
-    getMarkdown: () => editor.action(getMarkdown()),
-    isPristine: () => view().state.doc.eq(baseline),
+    getMarkdown: markdownOut,
+    isPristine: () => view().state.doc.eq(baseline) && currentMatter() === matter,
     setMarkdown: (next) => {
-      editor.action(replaceAll(next));
+      const split = splitFrontMatter(next);
+      showMatter(split);
+      editor.action(replaceAll(split.body));
       baseline = view().state.doc;
     },
     markSaved: () => {
+      matter = currentMatter();
       baseline = view().state.doc;
     },
     cursorBlockText: () => view().state.selection.$from.parent.textContent,
@@ -375,6 +421,7 @@ export async function createWysiwyg(container: HTMLElement, markdown: string, op
       observer.disconnect();
       container.removeEventListener("click", onClick);
       await editor.destroy();
+      matterHost.remove();
     },
   };
 }

@@ -13,6 +13,7 @@ import type { InlineMath } from "mdast-util-math";
 import { unified, type Plugin } from "unified";
 import { visit } from "unist-util-visit";
 
+import { FORMAT_LABEL, frontMatterFields, frontMatterTitle, splitFrontMatter, type FrontMatter } from "./frontmatter";
 import { sanitize } from "./sanitize";
 
 export interface RenderContext {
@@ -27,7 +28,7 @@ export interface RenderContext {
 }
 
 export interface RenderResult {
-  /** Text of the first `h1`, if any. */
+  /** Text of the first `h1`, else the front matter's `title`, if any. */
   title: string | null;
   /** Remote images and diagrams withheld because remote content is off. */
   remoteBlocked: number;
@@ -269,6 +270,36 @@ function collectDiagrams(root: HTMLElement, allowRemote: boolean): number {
   return held;
 }
 
+/**
+ * The metadata block as a collapsed panel: its first fields in the summary,
+ * every field when opened. Built from text, never from HTML.
+ */
+function renderFrontMatter(matter: FrontMatter): HTMLElement {
+  const details = document.createElement("details");
+  details.className = "frontmatter";
+  const summary = document.createElement("summary");
+  summary.className = "frontmatter__summary";
+  const fields = frontMatterFields(matter);
+  const shown = fields.filter((f) => f.key && !f.value.includes("\n")).slice(0, 2);
+  const rest = fields.length - shown.length;
+  summary.textContent = [
+    `${FORMAT_LABEL[matter.format]} front matter`,
+    ...shown.map((f) => `${f.key}: ${f.value}`),
+    ...(rest > 0 ? [`${rest} more`] : fields.length === 0 ? ["empty"] : []),
+  ].join(" · ");
+  const list = document.createElement("dl");
+  list.className = "frontmatter__fields";
+  for (const field of fields) {
+    const term = document.createElement("dt");
+    term.textContent = field.key;
+    const value = document.createElement("dd");
+    value.textContent = field.value;
+    list.append(term, value);
+  }
+  details.append(summary, list);
+  return details;
+}
+
 function addCopyControls(root: HTMLElement): void {
   for (const code of root.querySelectorAll("pre > code")) {
     const pre = code.parentElement;
@@ -294,8 +325,10 @@ export async function renderDocument(
   markdown: string,
   ctx: RenderContext,
 ): Promise<RenderResult> {
-  const { html, remoteBlocked } = sanitize(await markdownToHtml(markdown), { allowRemoteImages: ctx.allowRemoteImages });
+  const { matter, body } = splitFrontMatter(markdown);
+  const { html, remoteBlocked } = sanitize(await markdownToHtml(body), { allowRemoteImages: ctx.allowRemoteImages });
   container.innerHTML = html || "<p></p>";
+  if (matter) container.prepend(renderFrontMatter(matter));
 
   resolveImages(container, ctx);
   markLinks(container);
@@ -308,6 +341,6 @@ export async function renderDocument(
   void renderDiagrams(container, ctx.theme());
 
   const heading = container.querySelector("h1");
-  const title = heading?.textContent?.trim() || null;
+  const title = heading?.textContent?.trim() || (matter && frontMatterTitle(matter)) || null;
   return { title, remoteBlocked: remoteBlocked + heldDiagrams };
 }

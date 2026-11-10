@@ -81,4 +81,46 @@ describe("remote images in the editor", () => {
     expect(container.querySelector("img[alt=a]")?.getAttribute("src")).toBe("https://t/x.png");
     await editor.destroy();
   });
+
+});
+
+describe("front matter in the editor", () => {
+  it("keeps the block out of ProseMirror and writes it back byte for byte", async () => {
+    const text = "---\ntitle: Hello\n---\n\nbody\n";
+    const { editor, container } = await mount(text);
+    expect(container.querySelector("hr")).toBeNull();
+    expect(container.querySelector(".ProseMirror")?.textContent).toBe("body");
+    const field = container.querySelector<HTMLTextAreaElement>("textarea.frontmatter__editor");
+    expect(field?.value).toBe("title: Hello");
+    expect(editor.isPristine()).toBe(true);
+    expect(editor.getMarkdown()).toBe(text);
+    // An edit to the body leaves the block untouched.
+    editor.format("h1");
+    expect(editor.isPristine()).toBe(false);
+    expect(editor.getMarkdown()).toBe("---\ntitle: Hello\n---\n\n# body\n");
+    await editor.destroy();
+  });
+
+  it("edits the block through its field, and markSaved takes the edit as the new baseline", async () => {
+    let changes = 0;
+    document.body.innerHTML = "<article></article>";
+    const container = document.querySelector("article") as HTMLElement;
+    const editor = await createWysiwyg(container, "---\na: 1\n---\ntext\n", { dir: null, assetUrl: (p) => p, allowRemoteImages: () => true, onChange: () => { changes += 1; } });
+    const field = container.querySelector("textarea.frontmatter__editor") as HTMLTextAreaElement;
+    field.value = "a: 2";
+    field.dispatchEvent(new Event("input"));
+    expect(changes).toBeGreaterThan(0);
+    expect(editor.isPristine()).toBe(false);
+    expect(editor.getMarkdown()).toBe("---\na: 2\n---\ntext\n");
+    editor.markSaved();
+    expect(editor.isPristine()).toBe(true);
+    // A document without front matter shows no field; loading one brings it.
+    editor.setMarkdown("plain\n");
+    expect(container.querySelector<HTMLElement>(".frontmatter--editor")?.hidden).toBe(true);
+    expect(editor.getMarkdown()).toBe("plain\n");
+    editor.setMarkdown('{"k": "v"}\nj\n');
+    expect((container.querySelector("textarea.frontmatter__editor") as HTMLTextAreaElement).value).toBe('{"k": "v"}');
+    expect(editor.isPristine()).toBe(true);
+    await editor.destroy();
+  });
 });

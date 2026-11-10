@@ -66,4 +66,8 @@ describe("headingsFromMarkdown", () => {
   it("requires a space after the hashes", () => {
     expect(headingsFromMarkdown("#hashtag\n#  spaced")).toEqual([{ level: 1, text: "spaced", line: 2 }]);
   });
+
+  it("skips front matter, keeping line numbers for what follows", () => {
+    expect(headingsFromMarkdown("---\ntitle: x\n# not a heading\n---\n\n# Real\n")).toEqual([{ level: 1, text: "Real", line: 6 }]);
+  });
 });

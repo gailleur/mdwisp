@@ -5,6 +5,7 @@
 // (DOM headings, ProseMirror heading nodes, or Markdown lines); the sidebar
 // only draws them and reports clicks.
 
+import { splitFrontMatter } from "./frontmatter";
 import { Sidebar } from "./sidebar";
 
 export interface OutlineEntry {
@@ -23,11 +24,14 @@ export interface Heading {
 const FENCE = /^\s*(```|~~~)/;
 const HEADING = /^ {0,3}(#{1,6})[ \t]+(.+?)\s*#*\s*$/;
 
-/** Headings from Markdown source, skipping fenced code. Lines are 1-based. */
+/** Headings from Markdown source, skipping front matter and fenced code. Lines are 1-based. */
 export function headingsFromMarkdown(text: string): Heading[] {
   const out: Heading[] = [];
   let inFence = false;
+  const { matter } = splitFrontMatter(text);
+  const skip = matter ? matter.raw.split("\n").length - (matter.raw.endsWith("\n") ? 1 : 0) : 0;
   text.split("\n").forEach((raw, index) => {
+    if (index < skip) return;
     if (FENCE.test(raw)) {
       inFence = !inFence;
       return;

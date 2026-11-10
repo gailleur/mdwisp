@@ -379,6 +379,24 @@ describe("Preview tabs", () => {
     expect(names(tabs)).toEqual(["a.md", "b.md"]);
   });
 
+  it("an editor change leaves YAML front matter exactly as it was on disk", async () => {
+    fs.files.set("/docs/post.md", "---\r\ntitle: Hello\r\ndate: 2026-01-02\r\n---\r\n\r\nbody\r\n");
+    const { strip, viewer } = mount();
+    const host = makeHost(fs);
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/post.md"]);
+    expect(viewer.querySelector("details.frontmatter")).not.toBeNull();
+    await tabs.setMode("wysiwyg");
+    const tab = tabs.current as Tab;
+    tab.wysiwyg!.format("h2");
+    // The editor reports edits through a debounced listener.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(tab.dirty).toBe(true);
+    await tabs.save();
+    expect(host.saves).toEqual([["/docs/post.md", "---\r\ntitle: Hello\r\ndate: 2026-01-02\r\n---\r\n\r\n## body\r\n"]]);
+    expect(tab.dirty).toBe(false);
+  });
+
   it("pinAll keeps every preview, and the list reports its changes", async () => {
     const { strip, viewer } = mount();
     const onListChange = vi.fn();
