@@ -504,7 +504,8 @@ describe("Preview tabs", () => {
     expect(viewer.querySelector("h1")?.textContent).toBe("B");
     expect(placed).toEqual(["/docs/b.md"]);
     // The others carry their mode already but hold no editor and no rendering.
-    const [a, , c] = opened as Tab[];
+    const a = opened[0] as Tab;
+    const c = opened[2] as Tab;
     expect([a.mode, c.mode]).toEqual(["source", "wysiwyg"]);
     expect(a.source).toBeNull();
     expect(c.wysiwyg).toBeNull();
