@@ -12,6 +12,7 @@
 
 mod about;
 mod defaults;
+mod encoding;
 mod folder;
 mod pdf;
 mod sandbox;
@@ -68,6 +69,8 @@ struct Document {
     name: String,
     dir: String,
     text: String,
+    /// How the bytes were read; a save writes the same encoding back.
+    encoding: encoding::Encoding,
     /// True inside the App Sandbox, where a document grants access to
     /// itself only and images beside it may fail to load.
     sandboxed: bool,
@@ -234,7 +237,7 @@ fn open_document<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Document
         .to_path_buf();
 
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
-    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let (text, encoding) = encoding::decode(&bytes);
 
     app.fs_scope()
         .allow_directory(&dir, true)
@@ -252,6 +255,7 @@ fn open_document<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Document
         dir: dir.to_string_lossy().into_owned(),
         path: path.to_string_lossy().into_owned(),
         text,
+        encoding,
     })
 }
 
@@ -271,7 +275,9 @@ fn save_document<R: Runtime>(
     app: AppHandle<R>,
     path: String,
     text: String,
+    encoding: encoding::Encoding,
 ) -> Result<SavedDocument, String> {
+    let bytes = encoding::encode(&text, encoding)?;
     let requested = PathBuf::from(&path);
     if !looks_like_markdown(&requested) {
         return Err("Only Markdown files can be saved.".into());
@@ -294,9 +300,7 @@ fn save_document<R: Runtime>(
     match create_temp_beside(&dir, &name) {
         Ok((temp, mut file)) => {
             use std::io::Write;
-            let written = file
-                .write_all(text.as_bytes())
-                .and_then(|()| file.sync_all());
+            let written = file.write_all(&bytes).and_then(|()| file.sync_all());
             drop(file);
             if let Err(error) = written.and_then(|()| std::fs::rename(&temp, &target)) {
                 let _ = std::fs::remove_file(&temp);
@@ -304,7 +308,7 @@ fn save_document<R: Runtime>(
             }
         }
         Err(_) if sandbox::active() => {
-            std::fs::write(&target, text.as_bytes()).map_err(|e| e.to_string())?;
+            std::fs::write(&target, &bytes).map_err(|e| e.to_string())?;
         }
         Err(error) => return Err(error.to_string()),
     }
@@ -525,6 +529,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let reload = MenuItemBuilder::with_id("reload", "Reload")
         .accelerator("CmdOrCtrl+R")
         .build(app)?;
+    let convert_utf8 = MenuItemBuilder::with_id("convert-utf8", "Convert to UTF-8").build(app)?;
     // Not the platform's usual key: that one jumps to a file, as in every
     // editor this app sits beside.
     let print = MenuItemBuilder::with_id("print", "Print…")
@@ -553,6 +558,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&save_as)
         .item(&autosave)
         .item(&reload)
+        .item(&convert_utf8)
         .separator()
         .item(&print)
         .item(&export_pdf)

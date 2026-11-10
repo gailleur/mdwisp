@@ -5,24 +5,31 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Encoding } from "./encoding";
 import { Tabs, type LoadedDocument, type Tab, type TabHost } from "./tabs";
 
 interface FakeFs {
   files: Map<string, string>;
   watchers: Map<string, () => void>;
+  /** How a file reads; UTF-8 when absent. */
+  encodings?: Map<string, Encoding>;
 }
 
-function makeHost(fs: FakeFs, overrides: Partial<TabHost> = {}): TabHost & { saves: Array<[string, string]> } {
+function makeHost(fs: FakeFs, overrides: Partial<TabHost> = {}): TabHost & { saves: Array<[string, string]>; savedIn: Encoding[] } {
   const saves: Array<[string, string]> = [];
+  const savedIn: Encoding[] = [];
   return {
     saves,
+    savedIn,
     load: async (path: string): Promise<LoadedDocument> => {
       const text = fs.files.get(path);
       if (text === undefined) throw new Error("missing");
-      return { path, name: path.split("/").pop() ?? path, dir: path.slice(0, path.lastIndexOf("/")), text };
+      return { path, name: path.split("/").pop() ?? path, dir: path.slice(0, path.lastIndexOf("/")), text, encoding: fs.encodings?.get(path) };
     },
-    save: async (path, text) => {
+    save: async (path, text, encoding) => {
       saves.push([path, text]);
+      savedIn.push(encoding);
+      fs.encodings?.set(path, encoding);
       fs.files.set(path, text);
       return { path, name: path.split("/").pop() ?? path, dir: path.slice(0, path.lastIndexOf("/")) };
     },
@@ -395,6 +402,72 @@ describe("Preview tabs", () => {
     await tabs.save();
     expect(host.saves).toEqual([["/docs/post.md", "---\r\ntitle: Hello\r\ndate: 2026-01-02\r\n---\r\n\r\n## body\r\n"]]);
     expect(tab.dirty).toBe(false);
+  });
+
+  it("a Windows-1252 file is saved back in Windows-1252, and shows the encoding on the tab", async () => {
+    fs.files.set("/docs/old.md", "caf\u00e9\n");
+    fs.encodings = new Map([["/docs/old.md", "windows-1252"]]);
+    const { strip, viewer } = mount();
+    const host = makeHost(fs);
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/old.md"]);
+    const tab = tabs.current as Tab;
+    expect(tab.encoding).toBe("windows-1252");
+    await tabs.setMode("source");
+    tab.source!.setText("caf\u00e9 \u2014 ok\n");
+    await tabs.save();
+    expect(host.saves).toEqual([["/docs/old.md", "caf\u00e9 \u2014 ok\n"]]);
+    expect(host.savedIn).toEqual(["windows-1252"]);
+    expect(tab.dirty).toBe(false);
+  });
+
+  it("a character the encoding cannot hold stops the save; the banner converts to UTF-8 and saves", async () => {
+    fs.files.set("/docs/old.md", "caf\u00e9\n");
+    fs.encodings = new Map([["/docs/old.md", "windows-1252"]]);
+    const { strip, viewer } = mount();
+    const host = makeHost(fs);
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/old.md"]);
+    const tab = tabs.current as Tab;
+    await tabs.setMode("source");
+    tab.source!.setText("caf\u00e9 \u2713\n");
+    expect(await tabs.save()).toBe(false);
+    expect(host.saves).toEqual([]);
+    expect(tab.banner.hidden).toBe(false);
+    expect(tab.banner.textContent).toContain("“\u2713” cannot be written in Windows-1252");
+    tab.banner.querySelector("button")!.click();
+    await flush();
+    expect(host.saves).toEqual([["/docs/old.md", "caf\u00e9 \u2713\n"]]);
+    expect(host.savedIn).toEqual(["utf-8"]);
+    expect(tab.encoding).toBe("utf-8");
+    expect(tab.diskEncoding).toBe("utf-8");
+    expect(tab.dirty).toBe(false);
+    expect(tab.banner.hidden).toBe(true);
+  });
+
+  it("converting to UTF-8 makes the tab dirty until the next save writes it", async () => {
+    fs.files.set("/docs/bom.md", "# B\n");
+    fs.encodings = new Map([["/docs/bom.md", "utf-8-bom"]]);
+    const { strip, viewer } = mount();
+    const states: boolean[] = [];
+    const host = makeHost(fs, { onTabStateChange: (t) => { states.push(t.dirty); } });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/bom.md"]);
+    const tab = tabs.current as Tab;
+    tabs.setEncoding(tab, "utf-8");
+    expect(tab.dirty).toBe(true);
+    expect(states).toContain(true);
+    tabs.setEncoding(tab, "utf-8-bom");
+    expect(tab.dirty).toBe(false);
+    tabs.setEncoding(tab, "utf-8");
+    await tabs.save();
+    expect(host.savedIn).toEqual(["utf-8"]);
+    expect(tab.dirty).toBe(false);
+    // A reload takes the encoding the disk now has.
+    fs.files.set("/docs/bom.md", "# B2\n");
+    fs.watchers.get("/docs/bom.md")?.();
+    await flush();
+    expect(tab.encoding).toBe("utf-8");
   });
 
   it("pinAll keeps every preview, and the list reports its changes", async () => {

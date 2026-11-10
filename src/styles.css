@@ -794,7 +794,8 @@ body.is-resizing .viewer {
   text-align: left;
 }
 
-.status__path:disabled {
+.status__path:disabled,
+.status__encoding:disabled {
   background: transparent;
   color: var(--muted);
 }

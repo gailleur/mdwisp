@@ -26,6 +26,7 @@ export const COMMANDS = [
   { id: "save-as", group: "File", title: "Save As…", keys: "⌘⇧S" },
   { id: "autosave", group: "File", title: "Toggle Autosave" },
   { id: "reload", group: "File", title: "Reload from Disk", keys: "⌘R" },
+  { id: "convert-utf8", group: "File", title: "Convert to UTF-8" },
   { id: "print", group: "File", title: "Print…", keys: "⌘⌥P" },
   { id: "export-pdf", group: "File", title: "Export PDF…", keys: "⌘⇧E" },
   { id: "close-tab", group: "File", title: "Close Tab", keys: "⌘W" },
