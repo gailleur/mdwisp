@@ -43,6 +43,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
       notes: [
         "Autosave writes a second after each change. Off by default; the status bar shows “autosave on/off” and clicking it toggles, as does File ▸ Autosave, which is ticked while on.",
         "A file changed on disk reloads by itself; if you have unsaved edits a banner lets you keep yours or take the disk copy.",
+        "A file that is not UTF-8 opens all the same: a byte-order mark names UTF-8 or UTF-16, anything else is read as Windows-1252 (Latin-1 included), and the status bar shows which. It is saved back in that encoding, byte for byte. A character the encoding cannot hold stops the save with a banner that offers to convert the document to UTF-8; the encoding in the status bar, or File ▸ Convert to UTF-8 in the palette, converts at any time, and the next save writes it.",
         "Front matter (a YAML `---`, TOML `+++` or JSON block at the top, as Hugo, Jekyll and Obsidian write it) is shown as a collapsed panel in reading view and as a plain text field above the editor. It is saved back exactly as it was, whatever you edit below it. Source view shows it as text, which is where to add or remove one.",
         "File ▸ Use mdwisp for .md Files makes this the default Markdown app and is ticked while it is. The first launch offers it once; it is never changed without asking.",
         "Print and Export PDF put only the document on paper, with half-inch margins; the outline sidebar and the app chrome stay on screen.",
@@ -68,7 +69,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         k("⌘/", "this help"),
       ],
       notes: [
-        "The status bar, left to right: files switch, outline switch, mode (click to cycle), block type, path, then autosave switch, word count and reading time at 238 words per minute, line endings, theme. Switches are green while on.",
+        "The status bar, left to right: files switch, outline switch, mode (click to cycle), block type, path, then autosave switch, word count and reading time at 238 words per minute, line endings, encoding (click a legacy one to convert to UTF-8), theme. Switches are green while on.",
         "View ▸ Files Sidebar, Outline Sidebar, Remote Images, Preview Tabs and Reopen Documents at Launch are ticked while on.",
         "The files sidebar shows one folder: folders open on a click, Markdown files open as tabs, other files are listed greyed out. Hidden files are not shown. The open folder and the document in front are kept in step, and the folder is remembered for the next launch; × in its header closes it.",
         "A single click on a file in the sidebar opens it as a preview: a tab in italics that the next click replaces, so browsing does not fill the tab bar. Double-click the file or the tab, edit the document, or drag the tab, and it stays. View ▸ Preview Tabs turns previews off.",

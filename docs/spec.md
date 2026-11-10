@@ -52,7 +52,14 @@ does, not how any other product does it. All implementation is original.
 - A second launch while the app is running forwards its files to the running
   instance instead of starting a new one.
 - A document already open is focused rather than opened twice.
-- The document is read as UTF-8. Invalid bytes are replaced, never fatal.
+- The document is read as UTF-8. A byte-order mark names UTF-8 or UTF-16
+  (either byte order); bytes that are not valid UTF-8 are read as
+  Windows-1252, in which every byte has a meaning, so a file always opens
+  and nothing is ever replaced with U+FFFD. The status bar shows the
+  encoding, and a save writes the same one back, byte for byte, unless the
+  user converts the document to UTF-8 (status bar, or Convert to UTF-8 in
+  the palette). A character the encoding cannot hold stops the save with a
+  banner that offers the conversion; the shell refuses such a write too.
 - Nothing is ever written to disk unless the user explicitly saves (editor,
   phase 3) or exports.
 
@@ -187,8 +194,8 @@ does, not how any other product does it. All implementation is original.
 - New (untitled) documents open in the editor and ask for a location on
   first save. Save As moves the tab to the new path.
 - Saves are atomic (temp file + rename). Only Markdown extensions may be
-  written. Line endings (LF/CRLF) and the presence of a final newline are
-  preserved from the original file.
+  written. Line endings (LF/CRLF), the presence of a final newline and the
+  encoding are preserved from the original file.
 - Dirty indicator in the tab and window title; prompt on tab close, window
   close and reload when there are unsaved changes.
 - Autosave is an opt-in toggle (off by default); it saves one second after
