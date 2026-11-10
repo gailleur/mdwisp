@@ -1586,7 +1586,7 @@ body.is-resizing .viewer {
   box-sizing: border-box;
   width: calc(100% - 64px);
   max-width: 676px;
-  margin: 44px auto 0;
+  margin: 44px auto 24px;
 }
 
 .frontmatter--editor[hidden] {
