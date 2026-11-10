@@ -3,6 +3,7 @@
 
 import { denormalise, normalise, untitledName, type TextBaseline } from "./document";
 import type { WysiwygEditor } from "./editor";
+import { ENCODING_LABEL, unencodable, type Encoding } from "./encoding";
 import type { BlockType, FormatKind } from "./format";
 import { headingsFromMarkdown, type OutlineEntry } from "./outline";
 import { renderDiagrams, renderDocument, type RenderContext } from "./render";
@@ -21,13 +22,15 @@ export interface LoadedDocument {
   name: string;
   dir: string;
   text: string;
+  /** How the bytes were read; UTF-8 when absent. */
+  encoding?: Encoding;
   /** True in the App Store sandbox, where the folder may be unreadable. */
   sandboxed?: boolean;
 }
 
 export interface TabHost {
   load: (path: string) => Promise<LoadedDocument>;
-  save: (path: string, text: string) => Promise<{ path: string; name: string; dir: string }>;
+  save: (path: string, text: string, encoding: Encoding) => Promise<{ path: string; name: string; dir: string }>;
   pickSavePath: (defaultName: string) => Promise<string | null>;
   confirmDiscard: (message: string) => Promise<boolean>;
   /** Save / Discard / Cancel before a dirty document closes. */
@@ -76,6 +79,10 @@ export interface Tab {
   preview: boolean;
   /** The user chose to load this document's remote images (not persisted). */
   allowRemote: boolean;
+  /** What the next save writes. */
+  encoding: Encoding;
+  /** What the file on disk holds; differs from `encoding` after a conversion not yet saved. */
+  diskEncoding: Encoding;
   button: HTMLButtonElement;
   panel: HTMLElement;
   article: HTMLElement;
@@ -231,7 +238,7 @@ export class Tabs {
           bringForward(canonical);
           continue;
         }
-        const tab = this.createTab(doc.path, doc.name, doc.dir, doc.text);
+        const tab = this.createTab(doc.path, doc.name, doc.dir, doc.text, doc.encoding ?? "utf-8");
         tab.sandboxed = doc.sandboxed === true;
         // A preview takes the place of the previous one, in the same spot.
         const replaced = options.preview ? this.tabs.find((t) => t.preview && !t.dirty) : undefined;
@@ -365,6 +372,15 @@ export class Tabs {
   async save(tab: Tab | null = this.active, forceDialog = false): Promise<boolean> {
     if (!tab) return false;
     const text = this.currentText(tab);
+    // A legacy encoding cannot hold every character; refusing beats writing
+    // a replacement character into the file.
+    const lost = unencodable(text, tab.encoding);
+    if (lost) {
+      this.showBanner(tab, `“${lost}” cannot be written in ${ENCODING_LABEL[tab.encoding]}, so the document was not saved.`, [
+        ["Convert to UTF-8 and save", () => { this.setEncoding(tab, "utf-8"); void this.save(tab); }],
+      ]);
+      return false;
+    }
     let path = tab.path;
     if (!path || forceDialog) {
       path = await this.host.pickSavePath(tab.name);
@@ -372,7 +388,7 @@ export class Tabs {
     }
     try {
       const raw = denormalise(text, tab.baseline);
-      const saved = await this.host.save(path, raw);
+      const saved = await this.host.save(path, raw, tab.encoding);
       const moved = saved.path !== tab.path;
       tab.path = saved.path;
       tab.name = saved.name;
@@ -380,6 +396,7 @@ export class Tabs {
       tab.button.title = saved.path;
       tab.baseline = normalise(raw);
       tab.text = tab.baseline.text;
+      tab.diskEncoding = tab.encoding;
       tab.conflict = false;
       this.hideBanner(tab);
       this.markClean(tab);
@@ -397,6 +414,14 @@ export class Tabs {
 
   reloadActive(): void {
     if (this.active) void this.reloadFromDisk(this.active);
+  }
+
+  /** What the next save writes the document in; the file changes on that save. */
+  setEncoding(tab: Tab, encoding: Encoding): void {
+    if (tab.encoding === encoding) return;
+    tab.encoding = encoding;
+    this.updateDirty(tab);
+    this.host.onTabStateChange(tab);
   }
 
   /** Re-renders reading views and re-applies settings to editors. */
@@ -484,7 +509,7 @@ export class Tabs {
     button.addEventListener("lostpointercapture", finish);
   }
 
-  private createTab(path: string | null, name: string, dir: string | null, raw: string): Tab {
+  private createTab(path: string | null, name: string, dir: string | null, raw: string, encoding: Encoding = "utf-8"): Tab {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "tab";
@@ -517,7 +542,7 @@ export class Tabs {
     const baseline = normalise(raw);
     return {
       path, name, dir, sandboxed: false, title: name, mode: "view", dirty: false, conflict: false, preview: false,
-      allowRemote: false, button, panel, article, banner, text: baseline.text, baseline,
+      allowRemote: false, encoding, diskEncoding: encoding, button, panel, article, banner, text: baseline.text, baseline,
       wysiwyg: null, source: null, unwatch: null, busy: null, autosaveTimer: null,
     };
   }
@@ -659,6 +684,7 @@ export class Tabs {
     if (tab.mode === "wysiwyg" && tab.wysiwyg) dirty = !tab.wysiwyg.isPristine() && tab.wysiwyg.getMarkdown() !== tab.baseline.text;
     else if (tab.mode === "source" && tab.source) dirty = tab.source.getText() !== tab.baseline.text;
     else dirty = tab.text !== tab.baseline.text;
+    if (tab.encoding !== tab.diskEncoding) dirty = true;
     if (tab.path === null && tab.mode !== "view") dirty = dirty || this.currentText(tab).length > 0;
     if (dirty !== tab.dirty) {
       tab.dirty = dirty;
@@ -700,13 +726,13 @@ export class Tabs {
     if (incoming.text === tab.baseline.text) return; // Our own save, or a no-op write.
 
     if (!tab.dirty) {
-      await this.applyDiskText(tab, doc.text);
+      await this.applyDiskText(tab, doc);
       return;
     }
     tab.conflict = true;
     this.showBanner(tab, "This file changed on disk while you have unsaved edits.", [
-      ["Reload from disk", () => void this.applyDiskText(tab, doc.text).then(() => { tab.conflict = false; this.hideBanner(tab); })],
-      ["Keep my changes", () => { tab.baseline = incoming; tab.conflict = false; this.hideBanner(tab); this.updateDirty(tab); }],
+      ["Reload from disk", () => void this.applyDiskText(tab, doc).then(() => { tab.conflict = false; this.hideBanner(tab); })],
+      ["Keep my changes", () => { tab.baseline = incoming; tab.diskEncoding = doc.encoding ?? "utf-8"; tab.conflict = false; this.hideBanner(tab); this.updateDirty(tab); }],
     ]);
   }
 
@@ -717,15 +743,17 @@ export class Tabs {
       const doc = await this.host.load(tab.path);
       tab.conflict = false;
       this.hideBanner(tab);
-      await this.applyDiskText(tab, doc.text);
+      await this.applyDiskText(tab, doc);
     } catch (error) {
       this.host.onError(`${tab.name}\n${describe(error)}`);
     }
   }
 
-  private async applyDiskText(tab: Tab, raw: string): Promise<void> {
-    tab.baseline = normalise(raw);
+  private async applyDiskText(tab: Tab, doc: Pick<LoadedDocument, "text" | "encoding">): Promise<void> {
+    tab.baseline = normalise(doc.text);
     tab.text = tab.baseline.text;
+    tab.encoding = doc.encoding ?? "utf-8";
+    tab.diskEncoding = tab.encoding;
     if (tab.mode === "view") await this.renderView(tab, { restoreScroll: true });
     else if (tab.mode === "wysiwyg") tab.wysiwyg?.setMarkdown(tab.text);
     else tab.source?.setText(tab.text);

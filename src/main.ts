@@ -5,6 +5,7 @@ import "katex/dist/katex.min.css";
 import "./styles.css";
 
 import { COMMANDS, FORMAT_PREFIX, PALETTE_ID, type ActionId } from "./commands";
+import { ENCODING_LABEL } from "./encoding";
 import { Explorer } from "./explorer";
 import { FindBar } from "./find";
 import { BLOCK_LABEL, type FormatKind } from "./format";
@@ -455,7 +456,7 @@ function boot(): void {
     }
   };
 
-  // Status bar: files · outline · mode · block · path · (spacer) · autosave · words · eol · theme
+  // Status bar: files · outline · mode · block · path · (spacer) · autosave · words · eol · encoding · theme
   const filesButton = el("button", "status__button status__button--toggle", "▤ files");
   filesButton.type = "button";
   const outlineButton = el("button", "status__button status__button--toggle", "☰ outline");
@@ -488,6 +489,8 @@ function boot(): void {
   pathItem.type = "button";
   const wordsItem = el("span", "status__item");
   const eolItem = el("span", "status__item");
+  const encodingButton = el("button", "status__button status__encoding");
+  encodingButton.type = "button";
   status.append(
     filesButton,
     outlineButton,
@@ -498,6 +501,7 @@ function boot(): void {
     autosaveButton,
     wordsItem,
     eolItem,
+    encodingButton,
     createThemeButton(theme),
   );
   reflectToggles();
@@ -560,6 +564,12 @@ function boot(): void {
       wordsItem.textContent = `${words} words · ${readingTime(words)}`;
       wordsItem.title = `Reading time at ${WORDS_PER_MINUTE} words per minute`;
       eolItem.textContent = tab.baseline.eol === "\r\n" ? "CRLF" : "LF";
+      const legacy = tab.encoding !== "utf-8";
+      encodingButton.textContent = ENCODING_LABEL[tab.encoding];
+      encodingButton.disabled = !legacy;
+      encodingButton.title = legacy
+        ? `Read as ${ENCODING_LABEL[tab.encoding]} and saved back the same way. Click to convert to UTF-8.`
+        : "UTF-8";
       find.setTarget(tab.article, tab.mode === "wysiwyg");
       // Only the editor replaces through the bar: the reading view cannot be
       // edited, and source mode has CodeMirror's own search panel.
@@ -701,6 +711,27 @@ function boot(): void {
     ]);
   };
   pathItem.addEventListener("click", openPathMenu);
+
+  // The encoding in the status bar: a legacy one is kept on save, and this
+  // is where the document is converted to UTF-8 instead.
+  const convertToUtf8 = () => {
+    const tab = tabs.current;
+    if (!tab) return;
+    if (tab.encoding === "utf-8") {
+      toast("already UTF-8");
+      return;
+    }
+    const was = ENCODING_LABEL[tab.encoding];
+    tabs.setEncoding(tab, "utf-8");
+    toast(`encoding: UTF-8 (was ${was}); save to write it`);
+  };
+  encodingButton.addEventListener("click", () => {
+    if (picker && picker.element.isConnected) {
+      closePopup();
+      return;
+    }
+    picker = openMenu(encodingButton, [{ label: "Convert to UTF-8", onPick: () => { picker = null; convertToUtf8(); } }]);
+  });
   pathItem.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     openPathMenu();
@@ -917,6 +948,7 @@ function boot(): void {
     "save-as": () => void tabs.save(tabs.current, true),
     autosave: toggleAutosave,
     reload: () => tabs.reloadActive(),
+    "convert-utf8": convertToUtf8,
     print: () => void shell.printPage(),
     "export-pdf": () => void exportPdf(),
     "close-tab": () => tabs.closeActive(),

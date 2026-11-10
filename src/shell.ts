@@ -12,6 +12,8 @@ import { ask, open as openDialog, save as saveDialog } from "@tauri-apps/plugin-
 import { watch } from "@tauri-apps/plugin-fs";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
+import type { Encoding } from "./encoding";
+
 export const MARKDOWN_EXTENSIONS = ["md", "markdown", "mdown", "mkd"];
 
 export interface ShellDocument {
@@ -19,6 +21,8 @@ export interface ShellDocument {
   name: string;
   dir: string;
   text: string;
+  /** How the bytes were read; a save writes the same encoding back. */
+  encoding: Encoding;
   /** True in the App Store sandbox, where the folder may be unreadable. */
   sandboxed: boolean;
 }
@@ -33,8 +37,8 @@ export interface SavedDocument {
   dir: string;
 }
 
-export function saveDocument(path: string, text: string): Promise<SavedDocument> {
-  return invoke<SavedDocument>("save_document", { path, text });
+export function saveDocument(path: string, text: string, encoding: Encoding): Promise<SavedDocument> {
+  return invoke<SavedDocument>("save_document", { path, text, encoding });
 }
 
 export async function pickSavePath(defaultName: string): Promise<string | null> {
