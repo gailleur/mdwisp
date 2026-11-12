@@ -6,7 +6,7 @@
 // the same handlers. Ids starting with "fmt-" are Format actions and carry
 // their kind after the dash.
 
-export type CommandGroup = "File" | "Edit" | "Format" | "View" | "Help";
+export type CommandGroup = "File" | "Edit" | "Format" | "View" | "Window" | "Help";
 
 export interface Command {
   id: string;
@@ -15,6 +15,8 @@ export interface Command {
   title: string;
   /** Shortcut in Mac glyphs; `keysFor` spells it out elsewhere. */
   keys?: string;
+  /** The shortcut exists on macOS only; elsewhere the editor has the key. */
+  macOnly?: true;
 }
 
 export const COMMANDS = [
@@ -71,6 +73,8 @@ export const COMMANDS = [
   { id: "zoom-out", group: "View", title: "Zoom Out", keys: "⌘-" },
   { id: "zoom-reset", group: "View", title: "Actual Size", keys: "⌘0" },
 
+  { id: "minimize", group: "Window", title: "Minimize", keys: "⌘M", macOnly: true },
+  { id: "zoom", group: "Window", title: "Zoom" },
   { id: "help", group: "Help", title: "mdwisp Help", keys: "⌘/" },
   { id: "check-updates", group: "Help", title: "Check for Updates…" },
 ] as const satisfies readonly Command[];

@@ -155,6 +155,10 @@ does, not how any other product does it. All implementation is original.
   save panel, no third-party PDF library.
 - Reload on demand (Cmd/Ctrl+R) in addition to live reload.
 
+- Window: a native **Window** menu with Minimize (Cmd+M on macOS; elsewhere
+  Ctrl+M belongs to the source view) and Zoom, which the palette lists too.
+  On macOS it is also the system's windows menu, so Bring All to Front and
+  the window list come from AppKit.
 - Help: a native **Help** menu (Cmd/Ctrl+/) opens an in-app, offline panel
   listing every shortcut, the editing commands and the known limits (for
   example that math and Mermaid are edited as text). Its footer and the

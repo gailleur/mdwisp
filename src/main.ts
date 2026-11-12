@@ -923,7 +923,7 @@ function boot(): void {
         id: command.id,
         label: command.title,
         detail: command.group,
-        ...("keys" in command ? { keys: keysFor(command.keys, isMac) } : {}),
+        ...("keys" in command && (isMac || !("macOnly" in command)) ? { keys: keysFor(command.keys, isMac) } : {}),
       })),
       onPick: (item) => {
         recentCommands = [item.id, ...recentCommands.filter((id) => id !== item.id)].slice(0, RECENT_COMMANDS);
@@ -976,6 +976,8 @@ function boot(): void {
     "zoom-in": () => setZoom(zoomIndex + 1),
     "zoom-out": () => setZoom(zoomIndex - 1),
     "zoom-reset": () => setZoom(ZOOM_STEPS.indexOf(1)),
+    minimize: () => void shell.minimizeWindow(),
+    zoom: () => void shell.zoomWindow(),
   };
   /** Runs a menu, shortcut or palette command by its id. */
   const run = (id: string) => {
@@ -1098,6 +1100,7 @@ function boot(): void {
       key === "s" ? (event.shiftKey ? "save-as" : "save") :
       key === "r" ? "reload" :
       key === "w" ? "close-tab" :
+      key === "m" && isMac ? "minimize" :
       key === "1" ? "mode-view" :
       key === "2" ? "mode-wysiwyg" :
       key === "3" ? "mode-source" :

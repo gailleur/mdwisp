@@ -802,6 +802,23 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     };
     let help = help.build()?;
 
+    // Window: what the title bar's buttons do, so it is also reachable from
+    // the keyboard and the palette. ⌘M is macOS only; Ctrl+M is the source
+    // view's tab-focus toggle elsewhere. On macOS the menu is also the app's
+    // windows menu, so Bring All to Front and the window list come from the
+    // system.
+    let minimize = MenuItemBuilder::with_id("minimize", "Minimize");
+    #[cfg(target_os = "macos")]
+    let minimize = minimize.accelerator("Cmd+M");
+    let minimize = minimize.build(app)?;
+    let zoom = MenuItemBuilder::with_id("zoom", "Zoom").build(app)?;
+    let window = SubmenuBuilder::new(app, "Window")
+        .item(&minimize)
+        .item(&zoom);
+    #[cfg(target_os = "macos")]
+    let window = window.separator().bring_all_to_front();
+    let window = window.build()?;
+
     let menu = MenuBuilder::new(app);
 
     #[cfg(target_os = "macos")]
@@ -821,10 +838,15 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         menu.item(&app_menu)
     };
 
-    let menu = menu.items(&[&file, &edit, &format, &view, &help]).build()?;
+    let menu = menu
+        .items(&[&file, &edit, &format, &view, &window, &help])
+        .build()?;
     app.set_menu(menu)?;
     #[cfg(target_os = "macos")]
-    help.set_as_help_menu_for_nsapp()?;
+    {
+        window.set_as_windows_menu_for_nsapp()?;
+        help.set_as_help_menu_for_nsapp()?;
+    }
     Ok(())
 }
 

@@ -67,6 +67,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         k("⌘⇧D", "theme: auto → light → dark"),
         k("⌘= ⌘- ⌘0", "zoom in, out, reset"),
         k("⌘/", "this help"),
+        ...(isMac ? [k("⌘M", "minimize the window (Window ▸ Zoom fills the screen)")] : []),
       ],
       notes: [
         "The status bar, left to right: files switch, outline switch, mode (click to cycle), block type, path, then autosave switch, word count and reading time at 238 words per minute, line endings, encoding (click a legacy one to convert to UTF-8), theme. Switches are green while on.",

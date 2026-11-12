@@ -244,6 +244,15 @@ export function setWindowTitle(title: string): Promise<void> {
   return getCurrentWindow().setTitle(title);
 }
 
+export function minimizeWindow(): Promise<void> {
+  return getCurrentWindow().minimize();
+}
+
+/** Zoom on macOS, maximize elsewhere: fills the screen, or undoes that. */
+export function zoomWindow(): Promise<void> {
+  return getCurrentWindow().toggleMaximize();
+}
+
 export function assetUrl(path: string): string {
   return convertFileSrc(path);
 }
