@@ -251,8 +251,19 @@ fn queue_files<R: Runtime>(app: &AppHandle<R>, paths: Vec<String>) {
     }
     let _ = app.emit("open-files", &paths);
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.set_focus();
+        bring_to_front(&window);
     }
+}
+
+/// Puts the window in front of every other window, whatever state it is in.
+/// `set_focus` alone does nothing on macOS and Windows while the window is
+/// minimized (tao checks `isMiniaturized` / `WindowFlags::MINIMIZED` and
+/// returns), so a file opened from Finder or Explorer landed in a tab nobody
+/// could see. Restore and show first; each step is harmless when not needed.
+fn bring_to_front<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 /// Reads a document and grants the webview read access to its directory so
