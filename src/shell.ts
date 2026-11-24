@@ -91,6 +91,17 @@ export function setMenuChecked(id: string, checked: boolean): void {
   void invoke("set_menu_checked", { id, checked }).catch(() => undefined);
 }
 
+export interface RecentItem {
+  /** The menu event's id; the frontend reads the path back out of it. */
+  id: string;
+  label: string;
+}
+
+/** Fills File ▸ Open Recent; an empty list leaves a disabled placeholder. */
+export function setRecentFiles(items: RecentItem[]): void {
+  void invoke("set_recent_files", { items }).catch(() => undefined);
+}
+
 export async function printPage(): Promise<void> {
   const handled = await invoke<boolean>("print_page");
   if (!handled) {

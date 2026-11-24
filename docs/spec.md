@@ -20,6 +20,14 @@ does, not how any other product does it. All implementation is original.
   All Tabs* (⌘⌥W), also on a tab's context menu, clear a crowded strip:
   clean documents close at once, then each unsaved one is brought to the
   front and asked Save / Discard / Cancel; Cancel keeps it and the rest.
+  *Window ▸ Next Tab* (⌘⇧] or ⌃⇥) and *Previous Tab* (⌘⇧[ or ⌃⇧⇥) go
+  round the strip. *File ▸ Reopen Closed Tab* (⌘⇧T) brings back the last
+  tab closed, in its place in the strip, in the same view and at the same
+  position; up to ten closed tabs are remembered for the session.
+- *File ▸ Open Recent* lists the last ten documents opened or saved under
+  a new name, most recent first, with *Clear Menu* at the end. A document
+  that no longer exists is dropped from the list when chosen. The list is
+  kept in local storage and nowhere else.
 - Preview tabs: a single click on a file in the files sidebar (or Space on
   it) opens the document as a preview, a tab with its title in italics.
   There is at most one, and the next preview takes its place in the strip,

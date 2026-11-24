@@ -17,7 +17,8 @@ import { openPalette, type Palette, type PaletteItem } from "./palette";
 import { openBlockPicker, openMenu, type Picker } from "./picker";
 import { isExternalHref, isMarkdownHref, resolveRelative } from "./render";
 import { splitPath, type SearchHit } from "./search";
-import { LAST_SESSION_KEY, captureSession, forgetLastSession, readLastSession, restoreSession, saveSession, takeSession } from "./session";
+import { pushRecent, readRecent, recentLabels, withoutRecent, writeRecent } from "./recent";
+import { LAST_SESSION_KEY, captureSession, describeTab, forgetLastSession, readLastSession, restoreSession, saveSession, takeSession, toRestoreEntry, type SessionTab } from "./session";
 import * as shell from "./shell";
 import { Tabs, type Mode, type Tab } from "./tabs";
 import { createThemeButton, Theme } from "./theme";
@@ -615,6 +616,23 @@ function boot(): void {
     }, 350);
   };
 
+  // File ▸ Open Recent mirrors this list; the shell only draws it.
+  let recent = readRecent();
+  const syncRecentMenu = () => {
+    const labels = recentLabels(recent);
+    shell.setRecentFiles(recent.map((path, index) => ({ id: `recent:${path}`, label: labels[index] ?? path })));
+  };
+  const setRecent = (paths: string[]) => {
+    recent = paths;
+    writeRecent(recent);
+    syncRecentMenu();
+  };
+
+  // Closed tabs, most recent last, each with its place in the strip and
+  // where it was, so Reopen Closed Tab puts it back as it was.
+  const CLOSED_LIMIT = 10;
+  const closed: Array<SessionTab & { index: number }> = [];
+
   const tabs = new Tabs(strip, viewer, {
     load: shell.openDocument,
     save: shell.saveDocument,
@@ -633,6 +651,16 @@ function boot(): void {
       else scheduleSession();
     },
     onListChange: () => scheduleSession(),
+    onOpened: (tab) => {
+      if (tab.path) setRecent(pushRecent(recent, tab.path));
+    },
+    onClose: (tab, index) => {
+      // A preview that the next preview replaced was never really "closed".
+      if (!tab.path || tab.preview) return;
+      const entry = describeTab(tab, tab === tabs.current ? viewer.scrollTop : undefined);
+      closed.push({ ...entry, index });
+      if (closed.length > CLOSED_LIMIT) closed.shift();
+    },
     onEdit: scheduleOutline,
     onFolderUnreadable: (tab) => offerFolderAccess(tab, () => tabs.rerenderAll()),
     onError: reportError,
@@ -954,6 +982,37 @@ function boot(): void {
     overlay = { kind: "commands", panel };
   };
 
+  const openRecent = async (path: string) => {
+    // Chosen from the menu: a file that has gone is dropped from the list
+    // rather than reported as an error.
+    const present = await shell.statDocument(path).then(() => true, () => false);
+    if (!present) {
+      setRecent(withoutRecent(recent, path));
+      toast(`${displayPath(path)} no longer exists`);
+      return;
+    }
+    await tabs.open([path]);
+  };
+  const clearRecent = () => {
+    setRecent([]);
+    toast("recent documents cleared");
+  };
+  const reopenClosed = async () => {
+    // Skip entries whose document is open again by other means.
+    let entry = closed.pop();
+    while (entry && tabs.all.some((t) => t.path === entry?.path)) entry = closed.pop();
+    if (!entry) {
+      toast("no closed tab to reopen");
+      return;
+    }
+    const [tab] = await tabs.restore([toRestoreEntry(entry, viewer)], 0, true);
+    if (!tab) {
+      toast(`${displayPath(entry.path)} no longer exists`);
+      return;
+    }
+    tabs.move(tab, entry.index);
+  };
+
   const actions: Record<ActionId | typeof PALETTE_ID, () => void> = {
     [PALETTE_ID]: openCommandPalette,
     "quick-open": openQuickOpen,
@@ -973,6 +1032,10 @@ function boot(): void {
     "close-tab": () => tabs.closeActive(),
     "close-others": () => void tabs.closeOthers(),
     "close-all": () => void tabs.closeAll(),
+    "reopen-closed": () => void reopenClosed(),
+    "next-tab": () => tabs.cycle(1),
+    "prev-tab": () => tabs.cycle(-1),
+    "clear-recent": clearRecent,
     find: () => findAction(0),
     "find-next": () => findAction(1),
     "find-prev": () => findAction(-1),
@@ -1079,6 +1142,13 @@ function boot(): void {
 
   // Keyboard fallbacks for when the native menu does not intercept.
   document.addEventListener("keydown", (event) => {
+    // Control-Tab walks the tabs on every platform, as in a browser; it is
+    // not a menu key, so it is handled here alone.
+    if (event.ctrlKey && event.key === "Tab" && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      run(event.shiftKey ? "prev-tab" : "next-tab");
+      return;
+    }
     // Only the platform's own command key. Control on a Mac moves the
     // cursor in the editors (Ctrl+P, Ctrl+N, Ctrl+F), and AltGr, which
     // arrives as Ctrl+Alt on Windows, types characters.
@@ -1116,6 +1186,12 @@ function boot(): void {
       run("close-all");
       return;
     }
+    // Shifted brackets type other characters, so go by position.
+    if (event.shiftKey && !event.altKey && (event.code === "BracketRight" || event.code === "BracketLeft")) {
+      event.preventDefault();
+      run(event.code === "BracketRight" ? "next-tab" : "prev-tab");
+      return;
+    }
     const id =
       key === "f" ? (event.shiftKey ? "search-folder" : "find") :
       key === "p" ? (event.shiftKey ? PALETTE_ID : "quick-open") :
@@ -1125,6 +1201,7 @@ function boot(): void {
       key === "s" ? (event.shiftKey ? "save-as" : "save") :
       key === "r" ? "reload" :
       key === "w" ? "close-tab" :
+      key === "t" && event.shiftKey ? "reopen-closed" :
       key === "m" && isMac ? "minimize" :
       key === "1" ? "mode-view" :
       key === "2" ? "mode-wysiwyg" :
@@ -1140,7 +1217,11 @@ function boot(): void {
     run(id);
   });
 
-  void shell.onMenu(run);
+  void shell.onMenu((id) => {
+    if (id.startsWith("recent:")) void openRecent(id.slice("recent:".length));
+    else run(id);
+  });
+  syncRecentMenu();
   void shell.onDrop((paths) => void tabs.open(paths.filter(isMarkdownPath)));
   void shell.onCloseRequested(async () => {
     // Asking about unsaved documents brings each of them to the front;
