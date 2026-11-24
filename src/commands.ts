@@ -23,6 +23,7 @@ export const COMMANDS = [
   { id: "new", group: "File", title: "New", keys: "⌘N" },
   { id: "open", group: "File", title: "Open…", keys: "⌘O" },
   { id: "open-folder", group: "File", title: "Open Folder…", keys: "⌘⇧O" },
+  { id: "clear-recent", group: "File", title: "Clear Recent Documents" },
   { id: "quick-open", group: "File", title: "Go to File…", keys: "⌘P" },
   { id: "save", group: "File", title: "Save", keys: "⌘S" },
   { id: "save-as", group: "File", title: "Save As…", keys: "⌘⇧S" },
@@ -34,6 +35,7 @@ export const COMMANDS = [
   { id: "close-tab", group: "File", title: "Close Tab", keys: "⌘W" },
   { id: "close-others", group: "File", title: "Close Other Tabs" },
   { id: "close-all", group: "File", title: "Close All Tabs", keys: "⌘⌥W" },
+  { id: "reopen-closed", group: "File", title: "Reopen Closed Tab", keys: "⌘⇧T" },
   { id: "default-app", group: "File", title: "Use mdwisp for .md Files" },
 
   { id: "find", group: "Edit", title: "Find…", keys: "⌘F" },
@@ -77,6 +79,8 @@ export const COMMANDS = [
 
   { id: "minimize", group: "Window", title: "Minimize", keys: "⌘M", macOnly: true },
   { id: "zoom", group: "Window", title: "Zoom" },
+  { id: "next-tab", group: "Window", title: "Next Tab", keys: "⌘⇧]" },
+  { id: "prev-tab", group: "Window", title: "Previous Tab", keys: "⌘⇧[" },
   { id: "help", group: "Help", title: "mdwisp Help", keys: "⌘/" },
   { id: "check-updates", group: "Help", title: "Check for Updates…" },
 ] as const satisfies readonly Command[];

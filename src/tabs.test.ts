@@ -199,6 +199,61 @@ describe("Tabs", () => {
     expect(fs.watchers.size).toBe(0);
   });
 
+  it("cycles through the tabs in strip order, round the ends", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost(fs));
+    await tabs.open(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    expect(tabs.current?.path).toBe("/docs/c.md");
+    tabs.cycle(1);
+    expect(tabs.current?.path).toBe("/docs/a.md");
+    tabs.cycle(-1);
+    expect(tabs.current?.path).toBe("/docs/c.md");
+    tabs.cycle(-1);
+    expect(tabs.current?.path).toBe("/docs/b.md");
+  });
+
+  it("tells the host what was opened and what is closing, with its place", async () => {
+    const { strip, viewer } = mount();
+    const opened: string[] = [];
+    const closedAt: Array<[string, number, string]> = [];
+    const host = makeHost(fs, {
+      onOpened: (tab) => opened.push(tab.path ?? ""),
+      onClose: (tab, index) => closedAt.push([tab.path ?? "", index, tab.mode]),
+    });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    expect(opened).toEqual(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    // Opening again brings forward; it is not a new opening.
+    await tabs.open(["/docs/a.md"]);
+    expect(opened.length).toBe(3);
+    const b = tabs.all[1] as Tab;
+    tabs.activate(b);
+    await tabs.setMode("source");
+    b.source!.setText("# B\n");
+    await tabs.close(b);
+    expect(closedAt).toEqual([["/docs/b.md", 1, "source"]]);
+    // A tab kept on Cancel is not reported as closing.
+    const cancelHost = makeHost(fs, { confirmClose: async () => "cancel", onClose: (tab, index) => closedAt.push([tab.path ?? "", index, tab.mode]) });
+    const kept = new Tabs(mount().strip, mount().viewer, cancelHost);
+    await kept.open(["/docs/c.md"]);
+    await kept.setMode("source");
+    (kept.current as Tab).source!.setText("changed");
+    expect(await kept.close(kept.current as Tab)).toBe(false);
+    expect(closedAt.length).toBe(1);
+  });
+
+  it("reports an untitled document as opened once it is saved", async () => {
+    const { strip, viewer } = mount();
+    const opened: string[] = [];
+    const tabs = new Tabs(strip, viewer, makeHost(fs, { onOpened: (tab) => opened.push(tab.path ?? "") }));
+    await tabs.newDocument();
+    expect(opened).toEqual([]);
+    await tabs.setMode("source");
+    (tabs.current as Tab).source!.setText("# New\n");
+    expect(await tabs.save()).toBe(true);
+    expect(opened).toEqual(["/docs/new.md"]);
+  });
+
   it("saves and closes when the user chooses Save", async () => {
     const { strip, viewer } = mount();
     const host = makeHost(fs, { confirmClose: async () => "save" });
