@@ -22,12 +22,17 @@ export interface MenuItem {
   onPick: () => void;
 }
 
+export interface MenuOptions {
+  /** Above the status bar (the default), or just under `anchor`, as for a tab. */
+  placement?: "status" | "below";
+}
+
 /**
- * Opens a menu above the status bar, aligned with `anchor`. The menu closes
- * itself after a pick, on Escape, or on a mousedown outside it (except on
- * `anchor`, whose own click toggles it).
+ * Opens a menu aligned with `anchor`: above the status bar, or under the
+ * anchor itself. The menu closes itself after a pick, on Escape, or on a
+ * mousedown outside it (except on `anchor`, whose own click toggles it).
  */
-export function openMenu(anchor: HTMLElement, items: MenuItem[]): Picker {
+export function openMenu(anchor: HTMLElement, items: MenuItem[], options: MenuOptions = {}): Picker {
   const element = document.createElement("div");
   element.className = "popup";
   element.setAttribute("role", "menu");
@@ -70,9 +75,13 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[]): Picker {
 
   document.body.appendChild(element);
   // Line the menu up with its anchor, kept inside the window.
-  const left = anchor.getBoundingClientRect().left;
+  const rect = anchor.getBoundingClientRect();
   const room = Math.max(window.innerWidth - element.offsetWidth - 8, 8);
-  element.style.left = `${Math.min(Math.max(left, 8), room)}px`;
+  element.style.left = `${Math.min(Math.max(rect.left, 8), room)}px`;
+  if (options.placement === "below") {
+    element.style.bottom = "auto";
+    element.style.top = `${rect.bottom + 4}px`;
+  }
   document.addEventListener("mousedown", onOutside, true);
   document.addEventListener("keydown", onKey, true);
   (element.querySelector<HTMLButtonElement>(".popup__item--current") ?? element.querySelector<HTMLButtonElement>("button"))?.focus();

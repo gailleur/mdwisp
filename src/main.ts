@@ -737,6 +737,24 @@ function boot(): void {
     event.preventDefault();
     openPathMenu();
   });
+  // A tab's own menu: the three ways of closing, so a crowded strip can be
+  // cleared without the palette.
+  strip.addEventListener("contextmenu", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button.tab");
+    const tab = tabs.all.find((t) => t.button === button);
+    if (!tab || !button) return;
+    event.preventDefault();
+    closePopup();
+    picker = openMenu(
+      button,
+      [
+        { label: "Close Tab", key: keysFor("⌘W", isMac), onPick: () => { picker = null; void tabs.close(tab); } },
+        { label: "Close Other Tabs", onPick: () => { picker = null; void tabs.closeOthers(tab); } },
+        { label: "Close All Tabs", key: keysFor("⌘⌥W", isMac), onPick: () => { picker = null; void tabs.closeAll(); } },
+      ],
+      { placement: "below" },
+    );
+  });
 
   document.body.append(find.element);
   theme.onChange(() => tabs.retheme());
@@ -953,6 +971,8 @@ function boot(): void {
     print: () => void shell.printPage(),
     "export-pdf": () => void exportPdf(),
     "close-tab": () => tabs.closeActive(),
+    "close-others": () => void tabs.closeOthers(),
+    "close-all": () => void tabs.closeAll(),
     find: () => findAction(0),
     "find-next": () => findAction(1),
     "find-prev": () => findAction(-1),
@@ -1089,6 +1109,11 @@ function boot(): void {
     if (event.altKey && event.code === "KeyP") {
       event.preventDefault();
       run("print");
+      return;
+    }
+    if (event.altKey && event.code === "KeyW") {
+      event.preventDefault();
+      run("close-all");
       return;
     }
     const id =

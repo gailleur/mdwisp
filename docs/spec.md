@@ -16,7 +16,10 @@ does, not how any other product does it. All implementation is original.
 - Native shell: Tauri 2. Frontend: TypeScript, no UI framework.
 - One window, multiple documents as tabs; drag a tab sideways to reorder.
   Closing the last tab leaves an empty window with an Open action; it does
-  not quit the app on macOS.
+  not quit the app on macOS. *File ▸ Close Other Tabs* and *File ▸ Close
+  All Tabs* (⌘⌥W), also on a tab's context menu, clear a crowded strip:
+  clean documents close at once, then each unsaved one is brought to the
+  front and asked Save / Discard / Cancel; Cancel keeps it and the rest.
 - Preview tabs: a single click on a file in the files sidebar (or Space on
   it) opens the document as a preview, a tab with its title in italics.
   There is at most one, and the next preview takes its place in the strip,

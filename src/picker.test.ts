@@ -52,6 +52,17 @@ describe("openBlockPicker", () => {
 });
 
 describe("openMenu", () => {
+  it("sits under its anchor when asked to", () => {
+    document.body.innerHTML = "<button id='tab'>tab</button>";
+    const anchor = document.getElementById("tab")!;
+    anchor.getBoundingClientRect = () => new DOMRect(40, 10, 80, 24);
+    const menu = openMenu(anchor, [{ label: "Close Tab", onPick: () => {} }], { placement: "below" });
+    expect(menu.element.style.top).toBe("38px");
+    expect(menu.element.style.bottom).toBe("auto");
+    expect(menu.element.style.left).toBe("40px");
+    menu.close();
+  });
+
   it("shows the given items with their shortcuts, fires a pick and closes", () => {
     document.body.innerHTML = "";
     const anchor = document.createElement("button");

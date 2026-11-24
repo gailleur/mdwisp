@@ -437,6 +437,37 @@ export class Tabs {
     if (this.active) void this.close(this.active);
   }
 
+  /** Closes every tab but `keep` (the current one by default). */
+  closeOthers(keep: Tab | null = this.active): Promise<boolean> {
+    if (keep) this.activate(keep);
+    return this.closeMany(this.tabs.filter((t) => t !== keep));
+  }
+
+  /** Closes every tab. */
+  closeAll(): Promise<boolean> {
+    return this.closeMany([...this.tabs]);
+  }
+
+  /**
+   * Clean tabs go first, without a word; then each unsaved document is
+   * brought to the front and asked Save / Discard / Cancel in turn. Cancel
+   * stops there, so the documents still in question stay open and the
+   * rest of the strip is already clear. Resolves true when nothing was
+   * kept.
+   */
+  private async closeMany(targets: readonly Tab[]): Promise<boolean> {
+    // The active tab last among the clean ones: closing it hands the view
+    // to a neighbour, and that neighbour should be one that stays.
+    const clean = targets.filter((t) => !t.dirty).sort((a, b) => Number(a === this.active) - Number(b === this.active));
+    for (const tab of clean) await this.close(tab);
+    for (const tab of targets) {
+      if (!this.tabs.includes(tab)) continue;
+      this.activate(tab);
+      if (!(await this.close(tab))) return false;
+    }
+    return true;
+  }
+
   /** Puts `tab` at `index` (clamped) in the strip, shifting the others. */
   move(tab: Tab, index: number): void {
     const from = this.tabs.indexOf(tab);
