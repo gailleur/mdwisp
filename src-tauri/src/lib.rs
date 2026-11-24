@@ -618,6 +618,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let close_tab = MenuItemBuilder::with_id("close-tab", "Close Tab")
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
+    let close_others = MenuItemBuilder::with_id("close-others", "Close Other Tabs").build(app)?;
+    let close_all = MenuItemBuilder::with_id("close-all", "Close All Tabs")
+        .accelerator("CmdOrCtrl+Alt+W")
+        .build(app)?;
     // Checked while mdwisp is the system's default for .md; the frontend
     // reads that from the platform and mirrors it here.
     let default_app = CheckMenuItemBuilder::with_id("default-app", "Use mdwisp for .md Files")
@@ -640,7 +644,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .item(&print)
         .item(&export_pdf)
         .separator()
-        .item(&close_tab);
+        .item(&close_tab)
+        .item(&close_others)
+        .item(&close_all);
     if !cfg!(target_os = "macos") {
         file = file.separator().quit();
     }

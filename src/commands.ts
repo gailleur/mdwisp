@@ -32,6 +32,8 @@ export const COMMANDS = [
   { id: "print", group: "File", title: "Print…", keys: "⌘⌥P" },
   { id: "export-pdf", group: "File", title: "Export PDF…", keys: "⌘⇧E" },
   { id: "close-tab", group: "File", title: "Close Tab", keys: "⌘W" },
+  { id: "close-others", group: "File", title: "Close Other Tabs" },
+  { id: "close-all", group: "File", title: "Close All Tabs", keys: "⌘⌥W" },
   { id: "default-app", group: "File", title: "Use mdwisp for .md Files" },
 
   { id: "find", group: "Edit", title: "Find…", keys: "⌘F" },

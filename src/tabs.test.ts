@@ -149,6 +149,56 @@ describe("Tabs", () => {
     expect(host.saves).toEqual([]);
   });
 
+  it("closes the other tabs without a word when they are clean", async () => {
+    const { strip, viewer } = mount();
+    let asked = 0;
+    const host = makeHost(fs, { confirmClose: async () => { asked += 1; return "cancel"; } });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    const b = tabs.all[1] as Tab;
+    expect(await tabs.closeOthers(b)).toBe(true);
+    expect(tabs.all).toEqual([b]);
+    expect(tabs.current).toBe(b);
+    expect(strip.querySelectorAll("button.tab").length).toBe(1);
+    expect(asked).toBe(0);
+    expect([...fs.watchers.keys()]).toEqual(["/docs/b.md"]);
+  });
+
+  it("closing all clears the clean tabs, then asks about each unsaved one; Cancel keeps it", async () => {
+    const { strip, viewer } = mount();
+    const answers: Array<"save" | "discard" | "cancel"> = ["discard", "cancel"];
+    const asked: string[] = [];
+    const host = makeHost(fs, { confirmClose: async (name) => { asked.push(name); return answers.shift() ?? "cancel"; } });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    for (const path of ["/docs/a.md", "/docs/c.md"]) {
+      tabs.activate(tabs.all.find((t) => t.path === path) as Tab);
+      await tabs.setMode("source");
+      (tabs.current as Tab).source!.setText("# edited\n");
+    }
+    expect(await tabs.closeAll()).toBe(false);
+    // b went silently; a was discarded; c was kept on Cancel and is in front.
+    expect(asked).toEqual(["a.md", "c.md"]);
+    expect(tabs.all.map((t) => t.path)).toEqual(["/docs/c.md"]);
+    expect(tabs.current?.path).toBe("/docs/c.md");
+    expect((tabs.current as Tab).dirty).toBe(true);
+    expect(host.saves).toEqual([]);
+  });
+
+  it("closing all saves the unsaved documents the user chooses to save", async () => {
+    const { strip, viewer } = mount();
+    const host = makeHost(fs, { confirmClose: async () => "save" });
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/a.md", "/docs/b.md"]);
+    await tabs.setMode("source");
+    (tabs.current as Tab).source!.setText("# Saved by close all\n");
+    expect(await tabs.closeAll()).toBe(true);
+    expect(tabs.all.length).toBe(0);
+    expect(tabs.current).toBeNull();
+    expect(host.saves).toEqual([["/docs/b.md", "# Saved by close all\n"]]);
+    expect(fs.watchers.size).toBe(0);
+  });
+
   it("saves and closes when the user chooses Save", async () => {
     const { strip, viewer } = mount();
     const host = makeHost(fs, { confirmClose: async () => "save" });

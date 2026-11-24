@@ -39,6 +39,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         k("⌘⌥P", "print"),
         k("⌘⇧E", "export the reading view as PDF (asks where to save)"),
         k("⌘W", "close tab"),
+        k("⌘⌥W", "close all tabs (right-click a tab for Close Other Tabs)"),
       ],
       notes: [
         "Autosave writes a second after each change. Off by default; the status bar shows “autosave on/off” and clicking it toggles, as does File ▸ Autosave, which is ticked while on.",
