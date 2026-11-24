@@ -24,7 +24,10 @@ use std::time::Duration;
 
 #[cfg(not(target_os = "macos"))]
 use tauri::menu::AboutMetadataBuilder;
-use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{
+    CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, MenuItemKind, PredefinedMenuItem,
+    SubmenuBuilder,
+};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_fs::FsExt;
 
@@ -495,19 +498,71 @@ fn set_menu_checked<R: Runtime>(
     id: String,
     checked: bool,
 ) -> Result<(), String> {
-    use tauri::menu::{CheckMenuItem, MenuItemKind};
-    // `Menu::get` looks only at the top level; the toggles live in submenus.
-    fn find<R: Runtime>(items: Vec<MenuItemKind<R>>, id: &str) -> Option<CheckMenuItem<R>> {
-        items.into_iter().find_map(|item| match item {
-            MenuItemKind::Check(check) if check.id() == id => Some(check),
-            MenuItemKind::Submenu(sub) => sub.items().ok().and_then(|inner| find(inner, id)),
-            _ => None,
+    match find_menu_item(&app, &id)? {
+        MenuItemKind::Check(check) => check.set_checked(checked).map_err(|e| e.to_string()),
+        _ => Err(format!("No toggle menu item {id}.")),
+    }
+}
+
+/// Finds a menu item by id anywhere in the menu. `Menu::get` looks only at
+/// the top level; the items the frontend drives live in submenus.
+fn find_menu_item<R: Runtime>(app: &AppHandle<R>, id: &str) -> Result<MenuItemKind<R>, String> {
+    fn find<R: Runtime>(items: Vec<MenuItemKind<R>>, id: &str) -> Option<MenuItemKind<R>> {
+        items.into_iter().find_map(|item| {
+            if item.id() == id {
+                return Some(item);
+            }
+            match item {
+                MenuItemKind::Submenu(sub) => sub.items().ok().and_then(|inner| find(inner, id)),
+                _ => None,
+            }
         })
     }
     let menu = app.menu().ok_or("No menu.")?;
-    let item = find(menu.items().map_err(|e| e.to_string())?, &id)
-        .ok_or_else(|| format!("No toggle menu item {id}."))?;
-    item.set_checked(checked).map_err(|e| e.to_string())
+    find(menu.items().map_err(|e| e.to_string())?, id).ok_or_else(|| format!("No menu item {id}."))
+}
+
+#[derive(serde::Deserialize)]
+struct RecentItem {
+    id: String,
+    label: String,
+}
+
+const OPEN_RECENT_ID: &str = "open-recent";
+const CLEAR_RECENT_ID: &str = "clear-recent";
+
+/// Redraws File ▸ Open Recent from the frontend's list, most recent first,
+/// with Clear Menu at the end. The frontend owns the list (it persists
+/// across launches) and calls this at startup and whenever it changes.
+#[tauri::command]
+fn set_recent_files<R: Runtime>(app: AppHandle<R>, items: Vec<RecentItem>) -> Result<(), String> {
+    let MenuItemKind::Submenu(submenu) = find_menu_item(&app, OPEN_RECENT_ID)? else {
+        return Err("Open Recent is not a submenu.".into());
+    };
+    let err = |e: tauri::Error| e.to_string();
+    while submenu.remove_at(0).map_err(err)?.is_some() {}
+    fill_recent(&app, &submenu, &items).map_err(err)
+}
+
+fn fill_recent<R: Runtime>(
+    app: &AppHandle<R>,
+    submenu: &tauri::menu::Submenu<R>,
+    items: &[RecentItem],
+) -> tauri::Result<()> {
+    if items.is_empty() {
+        let none = MenuItemBuilder::new("No Recent Documents")
+            .enabled(false)
+            .build(app)?;
+        submenu.append(&none)?;
+    }
+    for item in items {
+        submenu.append(&MenuItemBuilder::with_id(item.id.as_str(), &item.label).build(app)?)?;
+    }
+    submenu.append(&PredefinedMenuItem::separator(app)?)?;
+    let clear = MenuItemBuilder::with_id(CLEAR_RECENT_ID, "Clear Menu")
+        .enabled(!items.is_empty())
+        .build(app)?;
+    submenu.append(&clear)
 }
 
 /// Opens the system print dialog. The webview's own `window.print()` is used
@@ -589,6 +644,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let open_folder = MenuItemBuilder::with_id("open-folder", "Open Folder…")
         .accelerator("CmdOrCtrl+Shift+O")
         .build(app)?;
+    // Filled by the frontend through `set_recent_files` once it has loaded.
+    let open_recent = SubmenuBuilder::with_id(app, OPEN_RECENT_ID, "Open Recent").build()?;
+    fill_recent(app, &open_recent, &[])?;
     let quick_open = MenuItemBuilder::with_id("quick-open", "Go to File…")
         .accelerator("CmdOrCtrl+P")
         .build(app)?;
@@ -622,6 +680,9 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let close_all = MenuItemBuilder::with_id("close-all", "Close All Tabs")
         .accelerator("CmdOrCtrl+Alt+W")
         .build(app)?;
+    let reopen_closed = MenuItemBuilder::with_id("reopen-closed", "Reopen Closed Tab")
+        .accelerator("CmdOrCtrl+Shift+T")
+        .build(app)?;
     // Checked while mdwisp is the system's default for .md; the frontend
     // reads that from the platform and mirrors it here.
     let default_app = CheckMenuItemBuilder::with_id("default-app", "Use mdwisp for .md Files")
@@ -631,6 +692,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let mut file = SubmenuBuilder::new(app, "File")
         .item(&new_doc)
         .item(&open)
+        .item(&open_recent)
         .item(&open_folder)
         .item(&quick_open)
         .item(&default_app)
@@ -646,7 +708,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .separator()
         .item(&close_tab)
         .item(&close_others)
-        .item(&close_all);
+        .item(&close_all)
+        .item(&reopen_closed);
     if !cfg!(target_os = "macos") {
         file = file.separator().quit();
     }
@@ -818,9 +881,19 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let minimize = minimize.accelerator("Cmd+M");
     let minimize = minimize.build(app)?;
     let zoom = MenuItemBuilder::with_id("zoom", "Zoom").build(app)?;
+    // Control-Tab does the same from the keyboard; it is not a menu key.
+    let next_tab = MenuItemBuilder::with_id("next-tab", "Next Tab")
+        .accelerator("CmdOrCtrl+Shift+]")
+        .build(app)?;
+    let prev_tab = MenuItemBuilder::with_id("prev-tab", "Previous Tab")
+        .accelerator("CmdOrCtrl+Shift+[")
+        .build(app)?;
     let window = SubmenuBuilder::new(app, "Window")
         .item(&minimize)
-        .item(&zoom);
+        .item(&zoom)
+        .separator()
+        .item(&next_tab)
+        .item(&prev_tab);
     #[cfg(target_os = "macos")]
     let window = window.separator().bring_all_to_front();
     let window = window.build()?;
@@ -884,6 +957,7 @@ pub fn run() {
             take_pending_files,
             confirm_close,
             set_menu_checked,
+            set_recent_files,
             print_page,
             export_pdf,
             default_app_status,

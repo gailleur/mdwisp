@@ -61,6 +61,13 @@ export interface TabHost {
   onReorder?: () => void;
   /** A tab was added, removed or moved. */
   onListChange?: () => void;
+  /** A document was opened by the user (not restored), or an untitled one got its path. */
+  onOpened?: (tab: Tab) => void;
+  /**
+   * A tab is about to go, having agreed to; `index` is its place in the
+   * strip. The editors are still mounted, so its position can be read.
+   */
+  onClose?: (tab: Tab, index: number) => void;
   onError: (message: string) => void;
 }
 
@@ -279,6 +286,7 @@ export class Tabs {
       if (replaced) await this.close(replaced);
       await this.showMode(tab, "view", { restoreScroll: false });
       this.watch(tab);
+      this.host.onOpened?.(tab);
     }
   }
 
@@ -417,6 +425,7 @@ export class Tabs {
     if (!(await this.settleBeforeClose(tab))) return false;
     const index = this.tabs.indexOf(tab);
     if (index < 0) return true;
+    this.host.onClose?.(tab, index);
     tab.unwatch?.();
     if (tab.autosaveTimer) window.clearTimeout(tab.autosaveTimer);
     await this.teardownEditors(tab);
@@ -435,6 +444,15 @@ export class Tabs {
 
   closeActive(): void {
     if (this.active) void this.close(this.active);
+  }
+
+  /** Brings the next (`1`) or previous (`-1`) tab to the front, round the ends. */
+  cycle(step: 1 | -1): void {
+    const count = this.tabs.length;
+    if (!this.active || count < 2) return;
+    const index = (this.tabs.indexOf(this.active) + step + count) % count;
+    const next = this.tabs[index];
+    if (next) this.activate(next);
   }
 
   /** Closes every tab but `keep` (the current one by default). */
@@ -555,6 +573,7 @@ export class Tabs {
         tab.unwatch?.();
         tab.unwatch = null;
         this.watch(tab);
+        this.host.onOpened?.(tab);
       }
       this.refreshTitle(tab);
       return true;

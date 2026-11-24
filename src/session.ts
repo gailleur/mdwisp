@@ -11,7 +11,7 @@
 // launch. The other is kept up to date while the app runs and is what an
 // ordinary launch reopens, if the user wants documents reopened.
 
-import type { Mode, Tab, Tabs } from "./tabs";
+import type { Mode, RestoreEntry, Tab, Tabs } from "./tabs";
 
 /** Left by an update for the relaunch that follows; read once. */
 export const SESSION_KEY = "mdwisp.relaunch";
@@ -60,12 +60,17 @@ export function captureSession({ tabs, viewer, zoom }: SessionSurface): Session 
   for (const tab of tabs.all) {
     if (!tab.path) continue;
     if (tab === current) active = entries.length;
-    entries.push(describe(tab, tab === current ? viewer.scrollTop : undefined));
+    entries.push(describeTab(tab, tab === current ? viewer.scrollTop : undefined));
   }
   return { tabs: entries, active, zoom: zoom() };
 }
 
-function describe(tab: Tab, scrollTop: number | undefined): SessionTab {
+/**
+ * One tab as the snapshot records it: mode and place. `scrollTop` is the
+ * viewer's, meaningful only for the tab in front, which is the one the
+ * viewer shows.
+ */
+export function describeTab(tab: Tab, scrollTop: number | undefined): SessionTab {
   const kept = tab.deferred ? pending.get(tab) : undefined;
   if (kept) return { ...kept };
   const entry: SessionTab = { path: tab.path ?? "", mode: tab.mode };
@@ -137,6 +142,11 @@ export async function restoreSession(
   // The documents share one scroller: opening the later ones moved it, so
   // the front document is put back where it was once it is in front.
   place(active, entry, viewer);
+}
+
+/** The snapshot entry as something `Tabs.restore` can bring back, in its place. */
+export function toRestoreEntry(entry: SessionTab, viewer: HTMLElement): RestoreEntry {
+  return { path: entry.path, mode: entry.mode, preview: entry.preview === true, place: (tab) => place(tab, entry, viewer) };
 }
 
 function place(tab: Tab, entry: SessionTab, viewer: HTMLElement): void {

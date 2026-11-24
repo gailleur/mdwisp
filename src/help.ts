@@ -40,6 +40,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         k("⌘⇧E", "export the reading view as PDF (asks where to save)"),
         k("⌘W", "close tab"),
         k("⌘⌥W", "close all tabs (right-click a tab for Close Other Tabs)"),
+        k("⌘⇧T", "reopen the last closed tab, in its place and at its position"),
       ],
       notes: [
         "Autosave writes a second after each change. Off by default; the status bar shows “autosave on/off” and clicking it toggles, as does File ▸ Autosave, which is ticked while on.",
@@ -52,6 +53,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         "Go to file lists the open documents first, then the folder's Markdown files; letters match in order, so “spc” finds spec.md and “docs/sp” looks inside docs. Hidden folders and node_modules are left out.",
         "Find in folder turns the files sidebar into a search: results appear as you type, grouped by file. Click a line to open the document at that place; the match is shown through the find bar, so ⌘G steps on. The search is literal and ignores case. Esc, or the magnifier in the sidebar's header, returns to the files.",
         "The app starts with the documents that were open when it quit, each in the same view and place. View ▸ Reopen Documents at Launch turns that off.",
+        "File ▸ Open Recent lists the last ten documents opened; Clear Menu empties it. A document that no longer exists is dropped from the list when chosen.",
       ],
     },
     {
@@ -69,6 +71,7 @@ export function helpSections(isMac: boolean): HelpSection[] {
         k("⌘= ⌘- ⌘0", "zoom in, out, reset"),
         k("⌘/", "this help"),
         ...(isMac ? [k("⌘M", "minimize the window (Window ▸ Zoom fills the screen)")] : []),
+        k("⌘⇧] ⌘⇧[", "next tab, previous tab (also ⌃⇥ and ⌃⇧⇥)"),
       ],
       notes: [
         "The status bar, left to right: files switch, outline switch, mode (click to cycle), block type, path, then autosave switch, word count and reading time at 238 words per minute, line endings, encoding (click a legacy one to convert to UTF-8), theme. Switches are green while on.",
