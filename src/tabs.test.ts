@@ -254,6 +254,42 @@ describe("Tabs", () => {
     expect(opened).toEqual(["/docs/new.md"]);
   });
 
+  it("save all writes every unsaved document, asks where for an untitled one, and leaves a conflict alone", async () => {
+    const { strip, viewer } = mount();
+    const host = makeHost(fs);
+    const tabs = new Tabs(strip, viewer, host);
+    await tabs.open(["/docs/a.md", "/docs/b.md", "/docs/c.md"]);
+    for (const path of ["/docs/a.md", "/docs/c.md"]) {
+      tabs.activate(tabs.all.find((t) => t.path === path) as Tab);
+      await tabs.setMode("source");
+      (tabs.current as Tab).source!.setText(`# edited ${path}\n`);
+    }
+    // c changes on disk under the edits: a conflict, not Save All's to settle.
+    fs.files.set("/docs/c.md", "# Theirs\n");
+    fs.watchers.get("/docs/c.md")!();
+    await flush();
+    expect((tabs.current as Tab).conflict).toBe(true);
+    await tabs.newDocument();
+    await tabs.setMode("source");
+    (tabs.current as Tab).source!.setText("# untitled\n");
+    tabs.activate(tabs.all[0] as Tab);
+
+    expect(await tabs.saveAll()).toEqual({ saved: 2, conflicts: 1, cancelled: 0 });
+    expect(host.saves.map(([path]) => path)).toEqual(["/docs/a.md", "/docs/new.md"]);
+    expect(tabs.current?.path).toBe("/docs/new.md");
+    expect(fs.files.get("/docs/c.md")).toBe("# Theirs\n");
+    expect(tabs.all.find((t) => t.path === "/docs/c.md")?.dirty).toBe(true);
+  });
+
+  it("save all counts a Save As the user cancels", async () => {
+    const { strip, viewer } = mount();
+    const tabs = new Tabs(strip, viewer, makeHost(fs, { pickSavePath: async () => null }));
+    await tabs.newDocument();
+    await tabs.setMode("source");
+    (tabs.current as Tab).source!.setText("x");
+    expect(await tabs.saveAll()).toEqual({ saved: 0, conflicts: 0, cancelled: 1 });
+  });
+
   it("saves and closes when the user chooses Save", async () => {
     const { strip, viewer } = mount();
     const host = makeHost(fs, { confirmClose: async () => "save" });

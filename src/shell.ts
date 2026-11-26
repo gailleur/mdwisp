@@ -10,7 +10,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { watch } from "@tauri-apps/plugin-fs";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 
 import type { Encoding } from "./encoding";
 
@@ -37,6 +37,11 @@ export function openDocument(path: string): Promise<ShellDocument> {
 export interface DocumentStat {
   size: number;
   modified: number;
+}
+
+/** Selects the file in the system's file manager (Finder, Explorer…). */
+export function revealDocument(path: string): Promise<void> {
+  return revealItemInDir(path);
 }
 
 /** Size and mtime of a file, to tell our own save from a real change. */

@@ -656,6 +656,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let save_as = MenuItemBuilder::with_id("save-as", "Save As…")
         .accelerator("CmdOrCtrl+Shift+S")
         .build(app)?;
+    let save_all = MenuItemBuilder::with_id("save-all", "Save All").build(app)?;
     // Toggles are check items; the frontend owns the state and mirrors it
     // into the check mark through `set_menu_checked`.
     let autosave = CheckMenuItemBuilder::with_id("autosave", "Autosave")
@@ -665,6 +666,14 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .accelerator("CmdOrCtrl+R")
         .build(app)?;
     let convert_utf8 = MenuItemBuilder::with_id("convert-utf8", "Convert to UTF-8").build(app)?;
+    let reveal_label = if cfg!(target_os = "macos") {
+        "Reveal in Finder"
+    } else if cfg!(target_os = "windows") {
+        "Show in Explorer"
+    } else {
+        "Show in File Manager"
+    };
+    let reveal = MenuItemBuilder::with_id("reveal", reveal_label).build(app)?;
     // Not the platform's usual key: that one jumps to a file, as in every
     // editor this app sits beside.
     let print = MenuItemBuilder::with_id("print", "Print…")
@@ -699,8 +708,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .separator()
         .item(&save)
         .item(&save_as)
+        .item(&save_all)
         .item(&autosave)
         .item(&reload)
+        .item(&reveal)
         .item(&convert_utf8)
         .separator()
         .item(&print)
