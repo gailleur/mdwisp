@@ -75,6 +75,14 @@ does, not how any other product does it. All implementation is original.
   banner that offers the conversion; the shell refuses such a write too.
 - Nothing is ever written to disk unless the user explicitly saves (editor,
   phase 3) or exports.
+- *File ▸ Save All* writes every unsaved document; an untitled one is
+  brought to the front for its Save As. A document whose file changed on
+  disk under unsaved edits is left alone, with a note: its banner is where
+  that choice is made.
+- *Reveal in Finder* (*Show in Explorer* on Windows, *Show in File Manager*
+  on Linux) selects the current file in the system's file manager. It is in
+  the File menu and the palette, on the file name's menu in the status bar,
+  and on a tab's context menu.
 
 ## 3. Rendering
 

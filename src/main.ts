@@ -395,6 +395,10 @@ function boot(): void {
   if (!strip || !body || !viewer || !empty || !emptyOpen || !emptyNew || !emptyFolder || !status) throw new Error("Shell markup missing.");
 
   const isMac = /Mac/i.test(navigator.platform);
+  // The file manager goes by its name where it has one.
+  const revealLabel = isMac ? "Reveal in Finder" : /Win/i.test(navigator.platform) ? "Show in Explorer" : "Show in File Manager";
+  const titleFor = (command: { id: string; title: string }) => (command.id === "reveal" ? revealLabel : command.title);
+  const revealPath = (path: string) => shell.revealDocument(path).catch((error: unknown) => reportError(`Could not show ${displayPath(path)}: ${String(error)}`));
   if (isMac) document.documentElement.classList.add("is-mac");
   // The shell markup is written with Mac glyphs; spell them out elsewhere.
   if (!isMac) {
@@ -730,6 +734,7 @@ function boot(): void {
     if (!tab || !path) return;
     picker = openMenu(pathItem, [
       { label: "Reload from Disk", key: keysFor("⌘R", isMac), onPick: () => { picker = null; tabs.reloadActive(); } },
+      { label: revealLabel, onPick: () => { picker = null; void revealPath(path); } },
       {
         label: `Copy “${tab.name}” as Pathname`,
         onPick: () => {
@@ -773,12 +778,14 @@ function boot(): void {
     if (!tab || !button) return;
     event.preventDefault();
     closePopup();
+    const path = tab.path;
     picker = openMenu(
       button,
       [
         { label: "Close Tab", key: keysFor("⌘W", isMac), onPick: () => { picker = null; void tabs.close(tab); } },
         { label: "Close Other Tabs", onPick: () => { picker = null; void tabs.closeOthers(tab); } },
         { label: "Close All Tabs", key: keysFor("⌘⌥W", isMac), onPick: () => { picker = null; void tabs.closeAll(); } },
+        ...(path ? [{ label: revealLabel, onPick: () => { picker = null; void revealPath(path); } }] : []),
       ],
       { placement: "below" },
     );
@@ -967,7 +974,7 @@ function boot(): void {
       placeholder: "run a command",
       items: ordered.map((command) => ({
         id: command.id,
-        label: command.title,
+        label: titleFor(command),
         detail: command.group,
         ...("keys" in command && (isMac || !("macOnly" in command)) ? { keys: keysFor(command.keys, isMac) } : {}),
       })),
@@ -1013,6 +1020,28 @@ function boot(): void {
     tabs.move(tab, entry.index);
   };
 
+  const saveAll = async () => {
+    if (!tabs.all.some((t) => t.dirty)) {
+      toast("nothing to save");
+      return;
+    }
+    const { saved, conflicts, cancelled } = await tabs.saveAll();
+    const parts = [];
+    if (saved) parts.push(`saved ${saved === 1 ? "1 document" : `${saved} documents`}`);
+    if (conflicts) parts.push(`${conflicts} changed on disk: see ${conflicts === 1 ? "its" : "their"} banner`);
+    if (cancelled) parts.push(`${cancelled} not saved`);
+    toast(parts.join(" · "), conflicts > 0 || cancelled > 0);
+  };
+  const revealCurrent = () => {
+    const tab = tabs.current;
+    if (!tab) return;
+    if (!tab.path) {
+      toast("save the document first");
+      return;
+    }
+    void revealPath(tab.path);
+  };
+
   const actions: Record<ActionId | typeof PALETTE_ID, () => void> = {
     [PALETTE_ID]: openCommandPalette,
     "quick-open": openQuickOpen,
@@ -1024,6 +1053,8 @@ function boot(): void {
     "open-folder": () => void openFolder(),
     save: () => void tabs.save(),
     "save-as": () => void tabs.save(tabs.current, true),
+    "save-all": () => void saveAll(),
+    reveal: revealCurrent,
     autosave: toggleAutosave,
     reload: () => tabs.reloadActive(),
     "convert-utf8": convertToUtf8,

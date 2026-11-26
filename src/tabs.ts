@@ -524,6 +524,26 @@ export class Tabs {
     return true;
   }
 
+  /**
+   * Saves every unsaved document. An untitled one is brought to the front
+   * for its Save As. A document whose file changed on disk under unsaved
+   * edits is left alone: its banner is where that choice is made.
+   */
+  async saveAll(): Promise<{ saved: number; conflicts: number; cancelled: number }> {
+    const result = { saved: 0, conflicts: 0, cancelled: 0 };
+    for (const tab of [...this.tabs]) {
+      if (!tab.dirty) continue;
+      if (tab.conflict) {
+        result.conflicts += 1;
+        continue;
+      }
+      if (!tab.path) this.activate(tab);
+      if (await this.save(tab)) result.saved += 1;
+      else result.cancelled += 1;
+    }
+    return result;
+  }
+
   async setMode(mode: Mode): Promise<void> {
     const tab = this.active;
     if (!tab || tab.mode === mode) return;
